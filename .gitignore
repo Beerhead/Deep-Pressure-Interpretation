@@ -1,0 +1,9 @@
+/Else
+*.afm
+*.pfb
+*.db
+*.png
+*.gif
+*.pkl
+/.idea
+/__pycache__
