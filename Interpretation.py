@@ -9,6 +9,7 @@ from functools import lru_cache
 
 from Other import search_and_interpolate, sql_query_old
 
+
 class Ppl:
 
     def __init__(self, field, wname, data, new=False):
@@ -461,6 +462,7 @@ class AutoInterpretation:
                     if len(p) == 5:
                         p.pop()
         return calctables, times
+
 
 def Ppl_fabric(field, wname, data):
     return Ppl(field, wname, data, True)
