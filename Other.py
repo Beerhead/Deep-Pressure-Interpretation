@@ -3,7 +3,9 @@ from PyQt5 import QtSql, QtGui
 from PyQt5.Qt import *
 from Plot import PlotWidget2
 import cx_Oracle
+import base64
 
+from itertools import zip_longest
 
 class MeasurementsWidget(QWidget):
 
@@ -13,7 +15,6 @@ class MeasurementsWidget(QWidget):
         self.connectUi()
 
     def initUi(self):
-        cx_Oracle.init_oracle_client()
         self.HL = QHBoxLayout(self)
         self.measurelistview = QListView()
         self.date_and_button_layout = QVBoxLayout()
@@ -23,7 +24,7 @@ class MeasurementsWidget(QWidget):
         self.to_analysis_btn = QPushButton('Добавить в анализ выбранное')
         self.startdate = QDateEdit()
         self.startdate.setCalendarPopup(True)
-        self.startdate.setDate(QDate.currentDate())
+        self.startdate.setDate(QDate.currentDate().addDays(-1))
         self.enddate = QDateEdit()
         self.enddate.setCalendarPopup(True)
         self.enddate.setDate(QDate.currentDate())
@@ -46,20 +47,28 @@ class MeasurementsWidget(QWidget):
         self.HL.addWidget(self.plot)
         self.measurelistview.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.chosenmeasurelistview.setSelectionMode(QAbstractItemView.ExtendedSelection)
-
         self.list_model_1 = QtGui.QStandardItemModel()
         self.list_model_1.setColumnCount(1)
         self.list_model_2 = QtGui.QStandardItemModel()
         self.list_model_2.setColumnCount(1)
         self.measurelist = []
         self.chosenmeasurelist = []
-
+        self.currentfield = None
+        self.currentfieldid = None
+        self.currentwell = None
+        self.currentwellid = None
 
     def connectUi(self):
         self.searchbtn.clicked.connect(self.search_for_measurements_from_db)
         self.addbtn.clicked.connect(self.add_measurement_to_analysis)
         self.rmvbtn.clicked.connect(self.remove_measurement_from_analysis)
         self.fieldcombobox.currentIndexChanged.connect(self.get_well_names)
+        self.wellcombobox.currentIndexChanged.connect(self.set_current_well)
+
+
+    def set_current_well(self):
+        self.currentwell = self.wellcombobox.currentText()
+        self.currentwellid = None
 
     def get_field_names(self):
         with sql_query() as connection:
@@ -74,27 +83,82 @@ class MeasurementsWidget(QWidget):
         if self.fieldcombobox.currentIndex() != 0:
             with sql_query() as connection:
                 cursor = connection.cursor()
-                currentfield = self.fieldcombobox.currentText
+                self.currentfield = self.fieldcombobox.currentText()
                 cursor.execute('''SELECT ots_bn.sosfield.fldid from  ots_bn.sosfield
-                                WHERE ots_bn.sosfield.fldname = :field''', field = currentfield)
-                currentfieldid = cursor.fetchone()[0]
+                                WHERE ots_bn.sosfield.fldname = :field''', field = self.currentfield)
+                self.currentfieldid = cursor.fetchone()[0]
                 cursor.execute('''SELECT ots_bn.soswell.welname from ots_bn.soswell 
-                                WHERE ots_bn.soswell.welfieldid = :fieldid''', fieldid = currentfieldid)
+                                WHERE ots_bn.soswell.welfieldid = :fieldid''', fieldid = self.currentfieldid)
                 rows = [field[0] for field in cursor.fetchall()]
+                rows.insert(0, 'Все скважины')
                 self.wellcombobox.addItems(rows)
         else:
             self.wellcombobox.addItem('Все скважины')
+            self.currentwell = None
+            self.currentwellid = None
 
     def search_for_measurements_from_db(self):
-        with sql_query() as connection:
-            cursor = connection.cursor()
-            cursor.execute('''SELECT ots_bn.sosmeasurementmtmeter.mtinterval, ots_bn.sosmeasurement.meswellid
-                            FROM OTS_BN.Sosmeasurementmtmeter
-                            INNER JOIN OTS_BN.sosmeasurement 
-                            ON ots_bn.sosmeasurement.MESID = ots_bn.sosmeasurementmtmeter.mtmeasurementid
-                            WHERE (ots_bn.sosmeasurement.messtartdate > '25.01.2021') and
-                            (ots_bn.sosmeasurement.mestypeid = 'mtmeter')''')
-            rows = cursor.fetchall()
+        if self.fieldcombobox.currentIndex() == 0:
+            with sql_query() as connection:
+                cursor = connection.cursor()
+                if  self.startdate.date() != self.enddate.date():
+                    cursor.execute(''' SELECT ots_bn.sosmeasurement.meswellid,
+                                    ots_bn.sosmeasurementmtmeter.mtinterval,
+                                    ots_bn.sosmeasurementmtmeter.mtdate,
+                                    ots_bn.sosmeasurementmtmeter.mtpressure,
+                                    ots_bn.sosmeasurementmtmeter.mttemperature,
+                                    ots_bn.sosmeasurementmtmeter.mtcount,
+                                    ots_bn.sosmeasurementmtmeter.mtdepthstartdate,
+                                    ots_bn.sosmeasurementmtmeter.mtdepthinterval,
+                                    ots_bn.sosmeasurementmtmeter.mtdepthdate,
+                                    ots_bn.sosmeasurementmtmeter.mtdepth
+                                    from ots_bn.sosmeasurementmtmeter
+                                    INNER JOIN ots_bn.sosmeasurement
+                                    ON ots_bn.sosmeasurementmtmeter.mtmeasurementid = ots_bn.sosmeasurement.mesid
+                                    WHERE (ots_bn.sosmeasurement.messtartdate >= :startdate) and
+                                          (ots_bn.sosmeasurement.messtartdate <= :enddate)''',
+                                   startdate=self.startdate.date().toString(Qt.LocalDate),
+                                   enddate=self.enddate.date().toString(Qt.LocalDate))
+                else:
+                    cursor.execute(''' SELECT ots_bn.sosmeasurement.meswellid,
+                                    ots_bn.sosmeasurementmtmeter.mtinterval,
+                                    ots_bn.sosmeasurementmtmeter.mtdate,
+                                    ots_bn.sosmeasurementmtmeter.mtpressure,
+                                    ots_bn.sosmeasurementmtmeter.mttemperature,
+                                    ots_bn.sosmeasurementmtmeter.mtcount,
+                                    ots_bn.sosmeasurementmtmeter.mtdepthstartdate,
+                                    ots_bn.sosmeasurementmtmeter.mtdepthinterval,
+                                    ots_bn.sosmeasurementmtmeter.mtdepthdate,
+                                    ots_bn.sosmeasurementmtmeter.mtdepth
+                                    from ots_bn.sosmeasurementmtmeter
+                                    INNER JOIN ots_bn.sosmeasurement
+                                    ON ots_bn.sosmeasurementmtmeter.mtmeasurementid = ots_bn.sosmeasurement.mesid
+                                    WHERE (ots_bn.sosmeasurement.messtartdate >= :startdate) and
+                                          (ots_bn.sosmeasurement.messtartdate < :enddate)''',
+                                    startdate = self.startdate.date().toString(Qt.LocalDate),
+                                    enddate = self.enddate.date().addDays(1).toString(Qt.LocalDate))
+                rows = cursor.fetchall()
+
+                print(rows[0])
+                temp = None
+                print('!!!!!')
+                print(rows[0][2].read())
+                print('!!!!!')
+                print(base64.b64decode(rows[0][2].read()))
+                print('!!!!!')
+                print(base64.b64decode(rows[0][2].read()).decode('cp1251'))
+
+                # print(rows[0][2].size())
+                # print(rows[0][3].size())
+                # print(rows[0][4].size())
+                # print('!!!!!!!!!!!!!')
+                # for i, j, k in zip_longest(rows[0][2].read(), rows[0][3].read(), rows[0][4].read(), fillvalue= '!'):
+                #     print(i, end=" : ")
+                #     print(j, end=" : ")
+                #     print(k)
+
+
+
 
     def add_measurement_to_analysis(self):
         pass
@@ -144,7 +208,6 @@ def search_and_interpolate(searching_array, x, xleft=True):
 
 @contextmanager
 def sql_query():
-    msg = None
     username = 'Shusharin'
     userpwd = 'Shusharin555'
     ip = 'oilteamsrv.bashneft.ru'
@@ -172,3 +235,4 @@ def sql_query_old(db_name):
         if msg:
             print(msg)
         con.close()
+
