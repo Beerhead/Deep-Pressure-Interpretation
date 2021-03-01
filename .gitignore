@@ -4,6 +4,7 @@
 *.db
 *.png
 *.gif
+*.exe
 *.pkl
 /.idea
 /__pycache__

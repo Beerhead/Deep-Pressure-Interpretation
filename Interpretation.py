@@ -27,6 +27,8 @@ class Ppl:
         self.final_fig = None
         self.sup_times = None
         self.data_from_sup_times = None
+        self.vdp = None
+        self.layer = None
 
     def get_well_params(self):
         with sql_query_old('FWDB.db') as query:

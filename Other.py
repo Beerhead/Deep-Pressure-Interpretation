@@ -3,9 +3,11 @@ from PyQt5 import QtSql, QtGui
 from PyQt5.Qt import *
 from Plot import PlotWidget2
 import cx_Oracle
-import base64
-
-from itertools import zip_longest
+import pylzma
+from sys import byteorder
+import numpy as np
+import pandas as pd
+import datetime
 
 class MeasurementsWidget(QWidget):
 
@@ -65,7 +67,6 @@ class MeasurementsWidget(QWidget):
         self.fieldcombobox.currentIndexChanged.connect(self.get_well_names)
         self.wellcombobox.currentIndexChanged.connect(self.set_current_well)
 
-
     def set_current_well(self):
         self.currentwell = self.wellcombobox.currentText()
         self.currentwellid = None
@@ -85,10 +86,10 @@ class MeasurementsWidget(QWidget):
                 cursor = connection.cursor()
                 self.currentfield = self.fieldcombobox.currentText()
                 cursor.execute('''SELECT ots_bn.sosfield.fldid from  ots_bn.sosfield
-                                WHERE ots_bn.sosfield.fldname = :field''', field = self.currentfield)
+                                WHERE ots_bn.sosfield.fldname = :field''', field=self.currentfield)
                 self.currentfieldid = cursor.fetchone()[0]
                 cursor.execute('''SELECT ots_bn.soswell.welname from ots_bn.soswell 
-                                WHERE ots_bn.soswell.welfieldid = :fieldid''', fieldid = self.currentfieldid)
+                                WHERE ots_bn.soswell.welfieldid = :fieldid''', fieldid=self.currentfieldid)
                 rows = [field[0] for field in cursor.fetchall()]
                 rows.insert(0, 'Все скважины')
                 self.wellcombobox.addItems(rows)
@@ -101,62 +102,66 @@ class MeasurementsWidget(QWidget):
         if self.fieldcombobox.currentIndex() == 0:
             with sql_query() as connection:
                 cursor = connection.cursor()
-                if  self.startdate.date() != self.enddate.date():
-                    cursor.execute(''' SELECT ots_bn.sosmeasurement.meswellid,
-                                    ots_bn.sosmeasurementmtmeter.mtinterval,
-                                    ots_bn.sosmeasurementmtmeter.mtdate,
-                                    ots_bn.sosmeasurementmtmeter.mtpressure,
-                                    ots_bn.sosmeasurementmtmeter.mttemperature,
-                                    ots_bn.sosmeasurementmtmeter.mtcount,
-                                    ots_bn.sosmeasurementmtmeter.mtdepthstartdate,
-                                    ots_bn.sosmeasurementmtmeter.mtdepthinterval,
-                                    ots_bn.sosmeasurementmtmeter.mtdepthdate,
-                                    ots_bn.sosmeasurementmtmeter.mtdepth
-                                    from ots_bn.sosmeasurementmtmeter
-                                    INNER JOIN ots_bn.sosmeasurement
-                                    ON ots_bn.sosmeasurementmtmeter.mtmeasurementid = ots_bn.sosmeasurement.mesid
-                                    WHERE (ots_bn.sosmeasurement.messtartdate >= :startdate) and
-                                          (ots_bn.sosmeasurement.messtartdate <= :enddate)''',
-                                   startdate=self.startdate.date().toString(Qt.LocalDate),
-                                   enddate=self.enddate.date().toString(Qt.LocalDate))
+                startdate = self.startdate.date().toString(Qt.LocalDate)
+                if self.startdate.date() != self.enddate.date():
+                   enddate=self.enddate.date().toString(Qt.LocalDate)
                 else:
-                    cursor.execute(''' SELECT ots_bn.sosmeasurement.meswellid,
-                                    ots_bn.sosmeasurementmtmeter.mtinterval,
-                                    ots_bn.sosmeasurementmtmeter.mtdate,
-                                    ots_bn.sosmeasurementmtmeter.mtpressure,
-                                    ots_bn.sosmeasurementmtmeter.mttemperature,
-                                    ots_bn.sosmeasurementmtmeter.mtcount,
-                                    ots_bn.sosmeasurementmtmeter.mtdepthstartdate,
-                                    ots_bn.sosmeasurementmtmeter.mtdepthinterval,
-                                    ots_bn.sosmeasurementmtmeter.mtdepthdate,
-                                    ots_bn.sosmeasurementmtmeter.mtdepth
-                                    from ots_bn.sosmeasurementmtmeter
-                                    INNER JOIN ots_bn.sosmeasurement
-                                    ON ots_bn.sosmeasurementmtmeter.mtmeasurementid = ots_bn.sosmeasurement.mesid
-                                    WHERE (ots_bn.sosmeasurement.messtartdate >= :startdate) and
-                                          (ots_bn.sosmeasurement.messtartdate < :enddate)''',
-                                    startdate = self.startdate.date().toString(Qt.LocalDate),
-                                    enddate = self.enddate.date().addDays(1).toString(Qt.LocalDate))
+                   enddate=self.enddate.date().addDays(1).toString(Qt.LocalDate)
+                cursor.execute(''' SELECT ots_bn.sosmeasurement.meswellid,
+                                                    ots_bn.sosmeasurementmtmeter.mtinterval,
+                                                    ots_bn.sosmeasurementmtmeter.mtdate,
+                                                    ots_bn.sosmeasurementmtmeter.mtpressure,
+                                                    ots_bn.sosmeasurementmtmeter.mttemperature,
+                                                    ots_bn.sosmeasurementmtmeter.mtcount,
+                                                    ots_bn.sosmeasurementmtmeter.mtdepthstartdate,
+                                                    ots_bn.sosmeasurementmtmeter.mtdepthinterval,
+                                                    ots_bn.sosmeasurementmtmeter.mtdepthdate,
+                                                    ots_bn.sosmeasurementmtmeter.mtdepth,
+                                                    ots_bn.sosmeasurement.messtartdate
+                                                    from ots_bn.sosmeasurementmtmeter
+                                                    INNER JOIN ots_bn.sosmeasurement
+                                                    ON ots_bn.sosmeasurementmtmeter.mtmeasurementid = ots_bn.sosmeasurement.mesid
+                                                    WHERE (ots_bn.sosmeasurement.messtartdate >= :startdate) and
+                                                          (ots_bn.sosmeasurement.messtartdate <= :enddate)''',
+                               startdate=startdate,
+                               enddate=enddate)
                 rows = cursor.fetchall()
-
                 print(rows[0])
-                temp = None
-                print('!!!!!')
-                print(rows[0][2].read())
-                print('!!!!!')
-                print(base64.b64decode(rows[0][2].read()))
-                print('!!!!!')
-                print(base64.b64decode(rows[0][2].read()).decode('cp1251'))
+                well_name, field_name = self.get_well_field_and_number(rows[0][0]) # Скважина
 
-                # print(rows[0][2].size())
-                # print(rows[0][3].size())
-                # print(rows[0][4].size())
-                # print('!!!!!!!!!!!!!')
-                # for i, j, k in zip_longest(rows[0][2].read(), rows[0][3].read(), rows[0][4].read(), fillvalue= '!'):
-                #     print(i, end=" : ")
-                #     print(j, end=" : ")
-                #     print(k)
+                pressure_BLOB = rows[0][3].read() # Давление
+                bytes_len = int.from_bytes(pressure_BLOB[3:7], byteorder=byteorder)
+                pressure = pd.Series(np.frombuffer(pylzma.decompress(pressure_BLOB[7:],
+                                                                     maxlength=bytes_len), dtype=np.dtype('f')))
 
+                temperature_BLOB = rows[0][4].read() #Температура
+                bytes_len = int.from_bytes(temperature_BLOB[3:7], byteorder=byteorder)
+                temperature = pd.Series(np.frombuffer(pylzma.decompress(temperature_BLOB[7:],
+                                                                        maxlength=bytes_len), dtype=np.dtype('f')))
+
+                depth_BLOB = rows[0][9].read() #Глубина
+                bytes_len = int.from_bytes(depth_BLOB[3:7], byteorder=byteorder)
+                depth = pd.Series(np.frombuffer(pylzma.decompress(depth_BLOB[7:],
+                                                                  maxlength=bytes_len), dtype=np.dtype('f')))
+
+                mtStartDateTime = pd.to_datetime(rows[0][10], dayfirst=True) # Даты манометра
+                BD_mt_delta=rows[0][1]
+                mtTimeDelta = pd.Timedelta(minutes=BD_mt_delta.minute, seconds=BD_mt_delta.second)
+                mt_dates = pd.Series((mtStartDateTime+mtTimeDelta*i for i in range(rows[0][5])))
+
+                date_depth_BLOB = rows[0][8].read() #даты глубин
+                bytes_len = int.from_bytes(date_depth_BLOB[3:7], byteorder=byteorder)
+                dates_depth = np.frombuffer(pylzma.decompress(date_depth_BLOB[7:], maxlength=bytes_len))
+                dates_depth = pd.Series(pd.to_datetime(dates_depth, unit = 'd',
+                                                       dayfirst=True, origin=pd.Timestamp('1900-01-01')))
+
+                data = 
+                # print(well_name, field_name)
+                # print(mt_dates)
+                # print(pressure)
+                # print(temperature)
+                # print(dates_depth)
+                # print(depth)
 
 
 
@@ -166,6 +171,13 @@ class MeasurementsWidget(QWidget):
     def remove_measurement_from_analysis(self):
         pass
 
+    def get_well_field_and_number(self, id):
+        with sql_query() as connection:
+            cursor = connection.cursor()
+            cursor.execute(''' SELECT ots_bn.soswell.welname, ots_bn.soswell.welcupola 
+                            FROM ots_bn.soswell WHERE welid = :wellid''', wellid=id)
+            rows = cursor.fetchone()
+        return rows[0], rows[1]
 
 def search_and_interpolate(searching_array, x, xleft=True):
     if xleft:
@@ -235,4 +247,5 @@ def sql_query_old(db_name):
         if msg:
             print(msg)
         con.close()
+
 
