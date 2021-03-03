@@ -33,6 +33,7 @@ class PlotWidget2(pg.PlotWidget):
         self.button2.clicked.connect(lambda: self.btn_podem_pressed_signal.emit())
 
     def plot(self, datatoplot, times=None, save=False):
+        print(datatoplot)
         self.plotItem.clear()
         try:
             self.plotItem.scene().removeItem(self.plot2)
@@ -45,6 +46,7 @@ class PlotWidget2(pg.PlotWidget):
         Y2 = datatoplot.iloc[:, 2]
         X2 = datatoplot.iloc[:, 3]
         Y3 = datatoplot.iloc[:, 4]
+        #print(len(X1), len(Y1), len(Y1), len(X2), len(Y3),)
         for g in (X1, Y1, Y2, X2, Y3):
             g.dropna(inplace=True)
         X1 = [i.to_pydatetime().timestamp() for i in X1.to_list()]
@@ -65,6 +67,7 @@ class PlotWidget2(pg.PlotWidget):
         curve3 = pg.PlotDataItem(X2, Y3, name='Depth', pen=pg.mkPen('b', width=2))
         self.plot2.addItem(curve3)
         self.plotItem.addLegend().addItem(curve3, 'Depth')
+        self.plotItem.getViewBox().autoRange()
 
         if save:
             # fig = BytesIO()
@@ -75,8 +78,8 @@ class PlotWidget2(pg.PlotWidget):
             if times is not None:
                 self.button1.setVisible(True)
                 self.button2.setVisible(True)
-                vlines1, vlines2 = [self.make_inf_line(time, 0) for time in times[0]], [self.make_inf_line(time, 1)
-                                                                                        for time in times[1]]
+                vlines1, vlines2 = [self.make_inf_line(time, 0) for time in times[0]], \
+                                   [self.make_inf_line(time, 1) for time in times[1]]
                 for line in chain(vlines1, vlines2):
                     self.plotItem.addItem(line)
                     line.inf_line_signal.connect(self.emitting_to_main)

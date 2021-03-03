@@ -7,7 +7,7 @@ from sklearn.metrics import r2_score
 from numpy.polynomial import polynomial as Poly
 from functools import lru_cache
 
-from Other import search_and_interpolate, sql_query_old
+import Other
 
 
 class Ppl:
@@ -16,8 +16,6 @@ class Ppl:
         self.field = field
         self.well_name = wname
         self.data = data
-        if not new:
-            self.get_well_params()
         self.table_models = None
         self.checks = None
         self.table_ind = None
@@ -29,9 +27,11 @@ class Ppl:
         self.data_from_sup_times = None
         self.vdp = None
         self.layer = None
+        if not new:
+            self.get_well_params()
 
     def get_well_params(self):
-        with sql_query_old('FWDB.db') as query:
+        with Other.sql_query_old('FWDB.db') as query:
             query.exec("SELECT Wells.VDP FROM Wells "
                        "INNER JOIN BF2 "
                        "ON BF2.IDField=Wells.Field "
@@ -47,6 +47,7 @@ class Ppl:
                        " AND BF2.Field=" + '"' + self.field + '"')
             query.first()
             self.layer = query.value('Layer')
+
         temp_pressure_time_series = self.data.iloc[:, 0]
         temp_pressure_time_series.dropna(inplace=True)
         self.research_date = str(temp_pressure_time_series[len(temp_pressure_time_series) // 2])[:10]
@@ -56,7 +57,7 @@ class Ppl:
             self.data.iloc[:, 3] = pd.to_datetime(self.data.iloc[:, 3], dayfirst=True)
         self.incl = self.data.iloc[:, [5, 6]]
         self.incl.dropna(inplace=True, how='all')
-        self.vdp_elong = search_and_interpolate(self.incl, self.vdp)
+        self.vdp_elong = Other.search_and_interpolate(self.incl, self.vdp)
 
 
 class AutoInterpretation:
@@ -66,6 +67,7 @@ class AutoInterpretation:
         self.alt = alt
 
     def transform_data(self):
+        print("TRANSFORM DATA")
         self.fed_data = []
         for d in self.data:
             kt_pres = d.iloc[:, 0].count()
@@ -114,6 +116,7 @@ class AutoInterpretation:
         return self.fed_data
 
     def divide_et_impera(self):
+        print("DIVIDE ET IMPERA")
         data = self.transform_data()
         modelp = joblib.load('rfc_model_pres.pkl')
         modeld = joblib.load('rfc_model_depths.pkl')
@@ -317,6 +320,7 @@ class AutoInterpretation:
 
     @lru_cache()
     def bias_and_splitting(self):
+        print("BIAS AND SPLITTING")
         indexes = self.divide_et_impera()
         freshdata = []
         for i, d in enumerate(self.data):
@@ -349,6 +353,7 @@ class AutoInterpretation:
         return freshdata
 
     def support_dots(self, incles, data, intervals):
+        print("SUPPORT DOTS")
         depths = []
         elongations = []
         pressures = []
@@ -372,33 +377,33 @@ class AutoInterpretation:
                 for depth in range(min_depth, max_depth):
                     if depth % intervals[n] == 0 and (max_depth - depth) > 30:
                         temp_depths.append(depth)  # глубины
-                        temp_elongations.append(round(search_and_interpolate(i, depth), 2))  # удлинения
+                        temp_elongations.append(round(Other.search_and_interpolate(i, depth), 2))  # удлинения
                         search_array = polka.iloc[:, [4, 3]]  # давления
                         search_array.dropna(inplace=True, how='all')
-                        temp_time = search_and_interpolate(search_array, depth)
+                        temp_time = Other.search_and_interpolate(search_array, depth)
                         temp_times.append(temp_time)
                         search_array = polka.iloc[:, [0, 1]]
                         search_array.dropna(inplace=True, how='all')
-                        temp_pressures.append(round(search_and_interpolate(search_array, temp_time), 2))
+                        temp_pressures.append(round(Other.search_and_interpolate(search_array, temp_time), 2))
                         search_array = polka.iloc[:, [0, 2]]  # температуры
                         search_array.dropna(inplace=True, how='all')
-                        temp_temperatures.append(round(search_and_interpolate(search_array, temp_time), 2))
+                        temp_temperatures.append(round(Other.search_and_interpolate(search_array, temp_time), 2))
                 temp_depths.append(max_depth)  # глубины
                 tempd.append(temp_depths)
-                temp_elongations.append(round(search_and_interpolate(i, max_depth), 2))  # удлинения
+                temp_elongations.append(round(Other.search_and_interpolate(i, max_depth), 2))  # удлинения
                 tempe.append(temp_elongations)
                 # давления
                 search_array = polka.iloc[:, [4, 3]]
                 search_array.dropna(inplace=True, how='all')
-                temp_time = search_and_interpolate(search_array, max_depth)
+                temp_time = Other.search_and_interpolate(search_array, max_depth)
                 search_array = polka.iloc[:, [0, 1]]
                 search_array.dropna(inplace=True, how='all')
-                temp_pressures.append(round(search_and_interpolate(search_array, temp_time), 2))
+                temp_pressures.append(round(Other.search_and_interpolate(search_array, temp_time), 2))
                 tempp.append(temp_pressures)
                 # температуры
                 search_array = polka.iloc[:, [0, 2]]
                 search_array.dropna(inplace=True, how='all')
-                temp_temperatures.append(round(search_and_interpolate(search_array, temp_time), 2))
+                temp_temperatures.append(round(Other.search_and_interpolate(search_array, temp_time), 2))
                 tempt.append(temp_temperatures)
                 temp_times.append(temp_time)
                 tempti.append(temp_times)
@@ -411,6 +416,7 @@ class AutoInterpretation:
         return depths, elongations, pressures, temperatures, times
 
     def zips(self):
+        print("ZIPS")
         data = self.bias_and_splitting()
         incles = []
         for d in self.data:
@@ -467,4 +473,4 @@ class AutoInterpretation:
 
 
 def Ppl_fabric(field, wname, data):
-    return Ppl(field, wname, data, True)
+        return Ppl(field, wname, data, True)
