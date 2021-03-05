@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from PyQt5 import QtSql, QtGui
+from PyQt5 import QtSql, QtGui, QtCore
 from PyQt5.Qt import *
 from Plot import PlotWidget2
 import Interpretation
@@ -13,10 +13,12 @@ import bisect
 
 class MeasurementsWidget(QWidget):
 
-    def __init__(self):
+    def __init__(self, parent):
         super(MeasurementsWidget, self).__init__()
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.initUi()
         self.connectUi()
+        self.parent = parent
 
     def initUi(self):
         self.setWindowTitle("Выбор замеров")
@@ -44,6 +46,7 @@ class MeasurementsWidget(QWidget):
         self.date_and_button_layout.addWidget(self.searchbtn)
         self.date_and_button_layout.addWidget(self.addbtn)
         self.date_and_button_layout.addWidget(self.rmvbtn)
+        self.date_and_button_layout.addWidget(self.to_analysis_btn)
         self.chosenmeasurelistview = QListView()
         self.plot = PlotWidget2()
         self.HL.addWidget(self.measurelistview)
@@ -63,15 +66,28 @@ class MeasurementsWidget(QWidget):
         self.currentwell = None
         self.currentwellid = None
         self.currentWellIdList = []
+        self.measurelistview.setMaximumWidth(300)
+        self.chosenmeasurelistview.setMaximumWidth(300)
+
 
     def connectUi(self):
         self.searchbtn.clicked.connect(self.search_for_measurements_from_db)
-        self.addbtn.clicked.connect(self.add_measurement_to_analysis)
-        self.rmvbtn.clicked.connect(self.remove_measurement_from_analysis)
+        self.addbtn.clicked.connect(lambda: self.throw_measurement_between_lists(self.measurelistview, self.chosenmeasurelistview, self.notPpllist, self.Ppllist))
+        self.rmvbtn.clicked.connect(lambda: self.throw_measurement_between_lists(self.chosenmeasurelistview, self.measurelistview, self.Ppllist, self.notPpllist))
         self.fieldcombobox.currentIndexChanged.connect(self.get_well_names)
         self.wellcombobox.currentIndexChanged.connect(self.set_current_well)
         self.measurelistview.clicked.connect(lambda: self.draw_graph(0))
-        self.chosenmeasurelistview.clicked.connect(lambda:self.draw_graph(1))
+        self.chosenmeasurelistview.clicked.connect(lambda: self.draw_graph(1))
+        self.to_analysis_btn.clicked.connect(self.throw_measurements_to_main)
+
+    def throw_measurements_to_main(self):
+        if len(self.Ppllist) == 0: return
+        for ppl in self.Ppllist: ppl.get_well_params()
+        print(self.chosenmeasurelistview.model())
+        print(self.Ppllist)
+        self.parent.receive_list(self.chosenmeasurelistview.model(), self.Ppllist)
+        self.close()
+
 
 
     def draw_graph(self, list_id):
@@ -94,7 +110,6 @@ class MeasurementsWidget(QWidget):
                                    fieldid=self.currentfieldid,
                                    name = self.currentwell)
                     self.currentwellid = cursor.fetchone()[0]
-                    print(self.currentwellid)
             else:
                 self.currentwell = None
                 self.currentwellid = None
@@ -135,10 +150,8 @@ class MeasurementsWidget(QWidget):
         with sql_query() as connection:
             cursor = connection.cursor()
             startdate = self.startdate.date().toString(Qt.LocalDate)
-            if self.startdate.date() != self.enddate.date():
-               enddate=self.enddate.date().toString(Qt.LocalDate)
-            else:
-               enddate=self.enddate.date().addDays(1).toString(Qt.LocalDate)
+            enddate=self.enddate.date().addDays(1).toString(Qt.LocalDate)
+
             Sql_Q = ''' SELECT ots_bn.sosmeasurement.meswellid,
                                             ots_bn.sosmeasurementmtmeter.mtinterval,
                                             ots_bn.sosmeasurementmtmeter.mtdate,
@@ -173,6 +186,7 @@ class MeasurementsWidget(QWidget):
             for row in rows:
                     print(row)
                     well_name, field_name = self.get_well_field_and_number(row[0]) # Скважина
+                    print(well_name, field_name)
                     if (not only_field or field_name == self.currentfield) and (row[9] is not None) and (row[3] is not None):
 
                         pressure_BLOB = row[3].read() # Давление
@@ -182,8 +196,7 @@ class MeasurementsWidget(QWidget):
                                                                                  maxlength=bytes_len), dtype=np.dtype('f')))
                         else:
                             pressure = pd.Series(np.frombuffer(pressure_BLOB[3:], dtype=np.dtype('f')))
-                        print('pressure')
-                        print(pressure)
+
                         pressure.dropna(inplace=True, how='all')
                         if row[4] is not None: #Температура
                             temperature_BLOB = row[4].read()
@@ -196,24 +209,19 @@ class MeasurementsWidget(QWidget):
                                 temperature = pd.Series(np.frombuffer(temperature_BLOB[3:], dtype=np.dtype('f')))
                         else:
                             temperature = pd.Series((None for i in range(pressure.size)))
-                        print('temperature')
-                        print(temperature)
+
                         temperature.dropna(inplace=True, how='all')
                         depth_BLOB = row[9].read() #Глубина
                         bytes_len = int.from_bytes(depth_BLOB[3:7], byteorder=byteorder)
                         depth = pd.Series(np.frombuffer(pylzma.decompress(depth_BLOB[7:],
                                                                           maxlength=bytes_len), dtype=np.dtype('f')))
 
-                        print('depth')
-                        print(depth)
                         if row[1] is not None: # Даты манометра
-                            print('VAR 1')
                             mtStartDateTime = pd.to_datetime(row[10], dayfirst=True)
                             BD_mt_delta=row[1]
                             mtTimeDelta = pd.Timedelta(minutes=BD_mt_delta.minute, seconds=BD_mt_delta.second)
                             mt_dates = pd.Series((mtStartDateTime+mtTimeDelta*i for i in range(len(pressure))))
                         else:
-                            print('VAR 2')
                             date_mt_BLOB = row[2].read()
                             bytes_len = int.from_bytes(date_mt_BLOB[3:7], byteorder=byteorder)
                             mt_dates = np.frombuffer(pylzma.decompress(date_mt_BLOB[7:], maxlength=bytes_len))
@@ -223,8 +231,8 @@ class MeasurementsWidget(QWidget):
                             mt_dates.reset_index(inplace=True, drop=True)
                             mt_dates = mt_dates.apply(lambda  x: x + pd.Timedelta(hours =time.hour, minutes=time.minute,
                                                                                   seconds=time.second))
-                        print('mt_dates')
-                        print(mt_dates)
+
+
                         if row[8] is not None: #даты глубин
                             date_depth_BLOB = row[8].read()
                             bytes_len = int.from_bytes(date_depth_BLOB[3:7], byteorder=byteorder)
@@ -233,16 +241,14 @@ class MeasurementsWidget(QWidget):
                                                                 dayfirst=True, origin=pd.Timestamp('1899-12-30')))
                         else:
                             dpStartDateTime = pd.to_datetime(row[6], dayfirst=True)
-                            BD_dp_delta=row[7]
-                            mtTimeDelta = pd.Timedelta(minutes=BD_dp_delta.minute, seconds=BD_dp_delta.second)
+                            mtTimeDelta = pd.Timedelta(minutes=row[7].minute, seconds=row[7].second)
                             dates_depth = pd.Series((dpStartDateTime+mtTimeDelta*i for i in range(len(depth))))
-                        print('dates_depth')
-                        print(dates_depth)
+
                         data = pd.concat([mt_dates, pressure, temperature,dates_depth,depth], axis = 1)
-                        print(field_name, well_name)
-                        print(data)
-                        data.to_clipboard()
-                        self.fullMeasurementList.append(Interpretation.Ppl_fabric(field_name, well_name, data))
+                        Ppl = Interpretation.Ppl_fabric(field_name, well_name, data)
+                        Ppl.OTS_Well_ID = row[0]
+                        self.fullMeasurementList.append(Ppl)
+
         if len(self.fullMeasurementList)>0:
             self.bi_divide()
 
@@ -251,42 +257,50 @@ class MeasurementsWidget(QWidget):
         self.leftmodel.clear()
         self.rightmodel.clear()
         for measuarement in self.fullMeasurementList:
-            kt_pres = measuarement.data.iloc[:, 1].count()
-            #print(measuarement.data)
-            points300 = to_300_points(measuarement.data.iloc[:kt_pres,1])
-            time_length = (measuarement.data.iloc[kt_pres-1,0]-measuarement.data.iloc[0,0]).total_seconds()/86400
-            if time_length > 2: time_length = 2
-            points300 = points300.append(pd.Series(time_length))
-            #print(points300)
-            points300 = points300.to_numpy().reshape(1, -1)
-            prediction = model.predict(points300)
-            name = QtGui.QStandardItem(measuarement.field + ' ' + measuarement.well_name)
-            if prediction[0] == 1:
-                self.Ppllist.append(measuarement)
-                self.rightmodel.appendRow(name)
-            else:
-                self.notPpllist.append(measuarement)
-                self.leftmodel.appendRow(name)
+            try:
+                kt_pres = measuarement.data.iloc[:, 1].count()
+                #print(measuarement.data)
+                measuarement.data.to_clipboard()
+                points300 = to_300_points(measuarement.data.iloc[:kt_pres,1])
+                time_length = (measuarement.data.iloc[kt_pres-1,0]-measuarement.data.iloc[0,0]).total_seconds()/86400
+                if time_length > 2 : time_length = 2
+                points300 = points300/points300.max()
+                points300 = points300.append(pd.Series(time_length))
+                points300 = points300.to_numpy().reshape(1, -1)
+
+                prediction = model.predict(points300)
+                name = QtGui.QStandardItem(measuarement.field + ' ' + measuarement.well_name)
+
+                if prediction[0] == 1:
+                    self.Ppllist.append(measuarement)
+                    self.rightmodel.appendRow(name)
+                else:
+                    self.notPpllist.append(measuarement)
+                    self.leftmodel.appendRow(name)
+            except:
+                print("ИСКЛЮЧЕНА:",  measuarement.field, measuarement.well_name)
         self.measurelistview.setModel(self.leftmodel)
         self.chosenmeasurelistview.setModel(self.rightmodel)
-        print(len(self.Ppllist))
-        print(len(self.notPpllist))
+        # print(len(self.Ppllist))
+        # print(len(self.notPpllist))
 
 
+    def throw_measurement_between_lists(self, listview_from, listview_to, list_from, list_to):
+        index_list = listview_from.selectedIndexes()
+        if len(index_list) > 0:
+            for index in index_list[::-1]:
+                item_text = listview_from.model().item(index.row()).text()
+                listview_from.model().removeRow(index.row())
+                new_item = QtGui.QStandardItem(item_text)
+                listview_to.model().appendRow(new_item)
+                list_to.append(list_from.pop(index.row()))
 
 
-
-    def add_measurement_to_analysis(self):
-        pass
-
-    def remove_measurement_from_analysis(self):
-        pass
-
-    def get_well_field_and_number(self, id):
+    def get_well_field_and_number(self, ID):
         with sql_query() as connection:
             cursor = connection.cursor()
             cursor.execute(''' SELECT ots_bn.soswell.welname, ots_bn.soswell.welfieldid 
-                            FROM ots_bn.soswell WHERE welid = :wellid''', wellid=id)
+                            FROM ots_bn.soswell WHERE welid = :wellid''', wellid=ID)
             rows = cursor.fetchone()
             wname = rows[0]
             cursor.execute(''' SELECT ots_bn.sosfield.fldname FROM ots_bn.sosfield

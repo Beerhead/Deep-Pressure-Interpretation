@@ -33,7 +33,7 @@ class PlotWidget2(pg.PlotWidget):
         self.button2.clicked.connect(lambda: self.btn_podem_pressed_signal.emit())
 
     def plot(self, datatoplot, times=None, save=False):
-        print(datatoplot)
+        datatoplot.to_clipboard()
         self.plotItem.clear()
         try:
             self.plotItem.scene().removeItem(self.plot2)
@@ -46,7 +46,6 @@ class PlotWidget2(pg.PlotWidget):
         Y2 = datatoplot.iloc[:, 2]
         X2 = datatoplot.iloc[:, 3]
         Y3 = datatoplot.iloc[:, 4]
-        #print(len(X1), len(Y1), len(Y1), len(X2), len(Y3),)
         for g in (X1, Y1, Y2, X2, Y3):
             g.dropna(inplace=True)
         X1 = [i.to_pydatetime().timestamp() for i in X1.to_list()]

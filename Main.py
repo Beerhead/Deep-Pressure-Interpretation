@@ -60,8 +60,7 @@ class MainWindow(QMainWindow):
         self.hltables.addLayout(self.label_ch_box_lay)
         self.GL = QGridLayout()  # лэй для кнопок
         self.btn1 = QPushButton('Открыть файлы')
-        self.btn2 = QPushButton('ТЕСТ')
-        self.btn3 = QPushButton('Интерпретация')
+        self.btn2 = QPushButton('Замеры ОТС')
         self.btn3 = QPushButton('Интерпретация')
         self.btn3.setDisabled(True)
         self.btn4 = QPushButton('Выгрузить отчеты')
@@ -110,8 +109,18 @@ class MainWindow(QMainWindow):
         self.plotWidget2.btn_podem_pressed_signal.connect(lambda: self.add_inf_line(1))
         self.plotWidget2.line_signal_to_main.connect(self.inf_line_moved)
 
+    def receive_list(self, model_to_set, list_of_measuarements):
+        print(model_to_set)
+        print(list_of_measuarements)
+        self.listmodel = model_to_set
+        self.testlist.setModel(self.listmodel)
+        self.ResearchsList = list_of_measuarements
+        print(self.ResearchsList)
+        self.btn3.setDisabled(False)
+
+
     def choose_researches(self):
-        self.measurewidget = MeasurementsWidget()
+        self.measurewidget = MeasurementsWidget(self)
         self.measurewidget.show()
 
     def add_inf_line(self, polka):
@@ -186,7 +195,7 @@ class MainWindow(QMainWindow):
 
     def keyPressEvent(self, e):
         if e.key() == QtCore.Qt.Key_Delete and len(self.testlist.selectedIndexes()) > 0 and self.testlist.hasFocus():
-            for i in self.testlist.selectedIndexes():
+            for i in self.testlist.selectedIndexes()[::-1]:
                 self.listmodel.removeRow(i.row())
                 self.ResearchsList.pop(i.row())
 
@@ -503,6 +512,7 @@ class MainWindow(QMainWindow):
         self.gifdialog.show()
         self.thread = GifThread(self, alt=True)
         self.thread.data = [res.data for res in self.ResearchsList]
+        self.thread.incl = [res.incl for res in self.ResearchsList]
         self.thread.finish_signal.connect(self.stop_gif)
         self.thread.start()
 
@@ -532,16 +542,17 @@ class MainWindow(QMainWindow):
 class GifThread(QtCore.QThread):
     finish_signal = pyqtSignal(object, object, object)
 
-    def __init__(self, parent=None, alt=False):
+    def __init__(self, parent=None,incl=None, alt=False):
         QtCore.QThread.__init__(self, parent)
         self.data = None
         self.alt = alt
+        self.incl = incl
 
     def run(self):
         if self.alt:
-            ai = AutoInterpretation(self.data, alt=True)
+            ai = AutoInterpretation(self.data,incl=self.incl, alt=True)
         else:
-            ai = AutoInterpretation(self.data)
+            ai = AutoInterpretation(self.data,incl=self.incl)
         dwd, st = ai.zips()
         td = ai.bias_and_splitting()
         self.finish_signal.emit(dwd, st, td)

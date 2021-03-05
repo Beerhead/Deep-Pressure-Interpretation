@@ -6,7 +6,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import r2_score
 from numpy.polynomial import polynomial as Poly
 from functools import lru_cache
-
+import pylzma
+from sys import byteorder
 import Other
 
 
@@ -27,10 +28,60 @@ class Ppl:
         self.data_from_sup_times = None
         self.vdp = None
         self.layer = None
+        self.OTS_Field_ID = None
+        self.OTS_Well_ID=None
         if not new:
-            self.get_well_params()
+            self.get_well_params_old()
 
     def get_well_params(self):
+        def sql_bed(bed_id):
+            with Other.sql_query() as connection:
+                cursor = connection.cursor()
+                cursor.execute('''SELECT ots_bn.sosbed.bedname from ots_bn.sosbed
+                                WHERE ots_bn.sosbed.bedid = :bedid''',
+                               bedid=bed_id)
+                row = cursor.fetchone()
+            return row[0]
+
+        with Other.sql_query() as connection:
+            cursor = connection.cursor()
+            cursor.execute('''SELECT ots_bn.sosperforation.PRFPERFORATEDZONETOP,
+                            ots_bn.sosperforation.PRFBEDID
+                            from ots_bn.sosperforation
+                            WHERE ots_bn.sosperforation.prfwellid = :wellid''',
+                           wellid=self.OTS_Well_ID)
+            rows = cursor.fetchall()
+            rows.sort()
+            self.vdp = rows[0][0]
+            layer = [sql_bed(i[1]) for i in rows]
+            self.layer = set(layer)
+            cursor.execute('''SELECT ots_bn.soswell.WELANGULARITYTESTDEPTH,
+                            ots_bn.soswell.WELANGULARITYTESTELONGATION from ots_bn.soswell
+                            WHERE ots_bn.soswell.welid = :wellid''',
+                           wellid=self.OTS_Well_ID)
+            rows = cursor.fetchone()
+
+            try:
+                bytes_len = int.from_bytes(rows[0].read()[3:7], byteorder=byteorder)
+                depth = pd.Series(
+                    np.frombuffer(pylzma.decompress(rows[0].read()[7:], maxlength=bytes_len), dtype=np.dtype('f')))
+
+            except:
+                depth = pd.Series(np.frombuffer(rows[0].read()[3:], dtype=np.dtype('f')))
+            try:
+                bytes_len = int.from_bytes(rows[1].read()[3:7], byteorder=byteorder)
+                elong = pd.Series(np.frombuffer(pylzma.decompress(rows[1].read()[7:], maxlength=bytes_len), dtype=np.dtype('f')))
+            except:
+                elong = pd.Series(np.frombuffer(rows[1].read()[3:], dtype=np.dtype('f')))
+            self.incl = pd.concat([depth, elong], axis=1)
+            #print(self.incl)
+            self.vdp_elong = round(Other.search_and_interpolate(self.incl, self.vdp), 2)
+            #print(self.vdp_elong)
+            temp_pressure_time_series = self.data.iloc[:, 0]
+            temp_pressure_time_series.dropna(inplace=True)
+            self.research_date = str(temp_pressure_time_series[len(temp_pressure_time_series) // 2])[:10]
+
+    def get_well_params_old(self):
         with Other.sql_query_old('FWDB.db') as query:
             query.exec("SELECT Wells.VDP FROM Wells "
                        "INNER JOIN BF2 "
@@ -62,9 +113,13 @@ class Ppl:
 
 class AutoInterpretation:
 
-    def __init__(self, vhoddata, alt=False):
+    def __init__(self, vhoddata, incl=None, alt=False):
         self.data = vhoddata
         self.alt = alt
+        if incl:
+            for d,i in zip(self.data,incl):
+                d = pd.concat([d, i], axis = 1)
+        print(self.data[0])
 
     def transform_data(self):
         print("TRANSFORM DATA")
@@ -324,7 +379,11 @@ class AutoInterpretation:
         indexes = self.divide_et_impera()
         freshdata = []
         for i, d in enumerate(self.data):
+            d.to_clipboard()
             ind = indexes[i]
+            print('i =   ', i)
+            print('0 =    ', ind[0])
+            print('1 =    ', ind[1])
             delimeter_pres = int((ind[0] + ind[1]) / 2)
             delimeter_depth = int((ind[2] + ind[3]) / 2)
             dt1 = d.iloc[ind[0], 0] - d.iloc[ind[2], 3]
@@ -419,6 +478,7 @@ class AutoInterpretation:
         print("ZIPS")
         data = self.bias_and_splitting()
         incles = []
+        print(self.data[0])
         for d in self.data:
             incl = d.iloc[:, [5, 6]]
             incl.dropna(inplace=True, how='all')
