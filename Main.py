@@ -11,8 +11,6 @@ from Plot import *
 from Report import *
 warnings.filterwarnings('ignore')
 
-#Конкретная скважина
-#фильтр по месторождениям
 
 class MainWindow(QMainWindow):
 
@@ -48,6 +46,7 @@ class MainWindow(QMainWindow):
         self.calctable1.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.calctable2.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.reslabel = QLabel('Данные по скважине')
+        self.reslabel.setAlignment(Qt.AlignCenter)
         self.hltables.addWidget(self.calctable1)
         self.hltables.addWidget(self.calctable2)
         self.label_ch_box_lay = QVBoxLayout()  # лэй для лэйбла и чекбоксов
@@ -55,8 +54,20 @@ class MainWindow(QMainWindow):
         self.ch_box_lay.addWidget(self.rb1)
         self.ch_box_lay.addWidget(self.rb2)
         self.ch_box_lay.setAlignment(Qt.AlignCenter)
+        self.deltaEdit = QLineEdit("100")
+        self.deltaEdit.setAlignment(Qt.AlignCenter)
+        self.deltaEdit.setMaximumWidth(60)
+        self.deltaEdit.setValidator(QIntValidator(1, 1000))
+        self.line1 = QLabel("Дельта глубины")
+        self.line1.setMaximumWidth(100)
+        self.line1.setAlignment(Qt.AlignCenter)
+        self.layout2 = QHBoxLayout()
+        self.layout2.addWidget(self.line1)
+        self.layout2.addWidget(self.deltaEdit)
+        self.label_ch_box_lay.addLayout(self.layout2)
         self.label_ch_box_lay.addLayout(self.ch_box_lay)
         self.label_ch_box_lay.addWidget(self.reslabel)
+        self.label_ch_box_lay.setAlignment(Qt.AlignCenter)
         self.hltables.addLayout(self.label_ch_box_lay)
         self.GL = QGridLayout()  # лэй для кнопок
         self.btn1 = QPushButton('Открыть файлы')
@@ -110,12 +121,10 @@ class MainWindow(QMainWindow):
         self.plotWidget2.line_signal_to_main.connect(self.inf_line_moved)
 
     def receive_list(self, model_to_set, list_of_measuarements):
-        print(model_to_set)
-        print(list_of_measuarements)
+
         self.listmodel = model_to_set
         self.testlist.setModel(self.listmodel)
         self.ResearchsList = list_of_measuarements
-        print(self.ResearchsList)
         self.btn3.setDisabled(False)
 
 
@@ -188,10 +197,12 @@ class MainWindow(QMainWindow):
     def rb1_clicked(self):
         temp_ind = self.testlist.selectedIndexes()[0].row()
         self.ResearchsList[temp_ind].table_ind = 0
+        self.graf()
 
     def rb2_clicked(self):
         temp_ind = self.testlist.selectedIndexes()[0].row()
         self.ResearchsList[temp_ind].table_ind = 1
+        self.graf()
 
     def keyPressEvent(self, e):
         if e.key() == QtCore.Qt.Key_Delete and len(self.testlist.selectedIndexes()) > 0 and self.testlist.hasFocus():
@@ -277,7 +288,7 @@ class MainWindow(QMainWindow):
     def graf(self):
         temp_ind = self.testlist.selectedIndexes()[0].row()
         layers = self.ResearchsList[temp_ind].layer
-        layers = ''.join(layers)
+        layers = ', '.join(layers)
         vdp = self.ResearchsList[temp_ind].vdp
         elongation = self.ResearchsList[temp_ind].vdp_elong
         if self.interpreted:
@@ -304,6 +315,10 @@ class MainWindow(QMainWindow):
             self.calctable2.setColumnWidth(5, 75)
             self.calctable2.setColumnWidth(6, 75)
             checked_sup_times = []
+
+
+
+
             for num, m in enumerate(self.ResearchsList[temp_ind].table_models):
                 half_cst = []
                 kt = 0
@@ -317,36 +332,28 @@ class MainWindow(QMainWindow):
                         half_cst.append(self.support_times[temp_ind][num][i])
                         ro += float(m.item(i, 4).text())
                         kt += 1
+
+                #print(num)
+                #print(round(ro / kt, 3))
                 ros.append(round(ro / kt, 3))
+                #print(round(float(m.item(m.rowCount() - 1, 2).text()) + delta * ros[-1] / 10, 3))
                 ppls.append(round(float(m.item(m.rowCount() - 1, 2).text()) + delta * ros[-1] / 10, 3))
                 checked_sup_times.append(half_cst)
             if 0.8 > ros[0] or 1.2 < ros[0] or 0.8 > ros[1] or 1.2 < ros[1]:
                 self.listmodel.item(temp_ind, 0).setIcon(self.style().standardIcon(10))
             else:
                 self.listmodel.item(temp_ind, 0).setIcon(self.style().standardIcon(45))
-            if mean(ros) > 0.98:
-                target = 1.16
-            else:
-                target = 0.88
-            cond1 = (max(target, ros[0]) - min(target, ros[0])) / max(target, ros[0])
-            cond2 = (max(target, ros[1]) - min(target, ros[1])) / max(target, ros[1])
-            if len(checked_sup_times[0]) > len(checked_sup_times[1]):
-                self.ResearchsList[temp_ind].table_ind = 0
+            if (self.focusWidget() == self.calctable1 and self.rb1.isChecked()) or \
+                (self.focusWidget() == self.plotWidget2 and self.rb1.isChecked()) or (self.focusWidget() == self.rb1):
                 self.ResearchsList[temp_ind].ro = ros[0]
                 self.ResearchsList[temp_ind].ppl = ppls[0]
-            elif len(checked_sup_times[0]) < len(checked_sup_times[1]):
-                self.ResearchsList[temp_ind].table_ind = 1
+            if self.focusWidget() == self.calctable2 and self.rb2.isChecked() or\
+                (self.focusWidget() == self.plotWidget2 and self.rb2.isChecked()) or (self.focusWidget() == self.rb2):
                 self.ResearchsList[temp_ind].ro = ros[1]
                 self.ResearchsList[temp_ind].ppl = ppls[1]
-            else:
-                if cond1 == min(cond1, cond2):
-                    self.ResearchsList[temp_ind].table_ind = 0
-                    self.ResearchsList[temp_ind].ro = ros[0]
-                    self.ResearchsList[temp_ind].ppl = ppls[0]
-                else:
-                    self.ResearchsList[temp_ind].table_ind = 1
-                    self.ResearchsList[temp_ind].ro = ros[1]
-                    self.ResearchsList[temp_ind].ppl = ppls[1]
+
+            print(self.ResearchsList[temp_ind].ro, self.ResearchsList[temp_ind].ppl)
+            print(ros, ppls)
             self.plotWidget.plot(self.ResearchsList[temp_ind].final_data, checked_sup_times)
             self.reslabel.setText('Данные по скважине' + '\n' +
                                   'Глубина ВДП - ' + str(vdp) + '\n' +
@@ -371,7 +378,6 @@ class MainWindow(QMainWindow):
         for i, res in enumerate(self.ResearchsList):
             filename = str(res.field) + " " + str(res.well_name) + '.pdf'
             filepath = os.getcwd() + fold + filename
-            print(filepath)
             cvs = canvas.Canvas(filepath)
             fig = self.ResearchsList[i].final_fig
             fig.seek(0)
@@ -513,6 +519,7 @@ class MainWindow(QMainWindow):
         self.thread = GifThread(self, alt=True)
         self.thread.data = [res.data for res in self.ResearchsList]
         self.thread.incl = [res.incl for res in self.ResearchsList]
+        self.thread.delta = int(self.deltaEdit.text())
         self.thread.finish_signal.connect(self.stop_gif)
         self.thread.start()
 
@@ -542,15 +549,16 @@ class MainWindow(QMainWindow):
 class GifThread(QtCore.QThread):
     finish_signal = pyqtSignal(object, object, object)
 
-    def __init__(self, parent=None,incl=None, alt=False):
+    def __init__(self, parent=None,incl=None, alt=False, delta = 100):
         QtCore.QThread.__init__(self, parent)
         self.data = None
         self.alt = alt
         self.incl = incl
+        self.delta = delta
 
     def run(self):
         if self.alt:
-            ai = AutoInterpretation(self.data,incl=self.incl, alt=True)
+            ai = AutoInterpretation(self.data,incl=self.incl, alt=True, delta=self.delta)
         else:
             ai = AutoInterpretation(self.data,incl=self.incl)
         dwd, st = ai.zips()

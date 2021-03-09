@@ -29,7 +29,7 @@ class Ppl:
         self.vdp = None
         self.layer = None
         self.OTS_Field_ID = None
-        self.OTS_Well_ID=None
+        self.OTS_Well_ID = None
         if not new:
             self.get_well_params_old()
 
@@ -65,7 +65,6 @@ class Ppl:
                 bytes_len = int.from_bytes(rows[0].read()[3:7], byteorder=byteorder)
                 depth = pd.Series(
                     np.frombuffer(pylzma.decompress(rows[0].read()[7:], maxlength=bytes_len), dtype=np.dtype('f')))
-
             except:
                 depth = pd.Series(np.frombuffer(rows[0].read()[3:], dtype=np.dtype('f')))
             try:
@@ -113,16 +112,15 @@ class Ppl:
 
 class AutoInterpretation:
 
-    def __init__(self, vhoddata, incl=None, alt=False):
+    def __init__(self, vhoddata, incl=None, alt=False, delta = 100):
         self.data = vhoddata
         self.alt = alt
+        self.delta = delta
         if incl:
-            for d,i in zip(self.data,incl):
-                d = pd.concat([d, i], axis = 1)
-        print(self.data[0])
+            for d,i,index in zip(self.data,incl,range(len(self.data))):
+                self.data[index] = pd.concat([d, i], axis = 1)
 
     def transform_data(self):
-        print("TRANSFORM DATA")
         self.fed_data = []
         for d in self.data:
             kt_pres = d.iloc[:, 0].count()
@@ -171,7 +169,6 @@ class AutoInterpretation:
         return self.fed_data
 
     def divide_et_impera(self):
-        print("DIVIDE ET IMPERA")
         data = self.transform_data()
         modelp = joblib.load('rfc_model_pres.pkl')
         modeld = joblib.load('rfc_model_depths.pkl')
@@ -370,20 +367,14 @@ class AutoInterpretation:
                 sampleindexes.append(depth_1_seeked_index)
                 sampleindexes.append(depth_2_seeked_index + 1)
                 finalindexes.append(sampleindexes)
-        print(finalindexes)
         return finalindexes
 
     @lru_cache()
     def bias_and_splitting(self):
-        print("BIAS AND SPLITTING")
         indexes = self.divide_et_impera()
         freshdata = []
         for i, d in enumerate(self.data):
-            d.to_clipboard()
             ind = indexes[i]
-            print('i =   ', i)
-            print('0 =    ', ind[0])
-            print('1 =    ', ind[1])
             delimeter_pres = int((ind[0] + ind[1]) / 2)
             delimeter_depth = int((ind[2] + ind[3]) / 2)
             dt1 = d.iloc[ind[0], 0] - d.iloc[ind[2], 3]
@@ -412,7 +403,6 @@ class AutoInterpretation:
         return freshdata
 
     def support_dots(self, incles, data, intervals):
-        print("SUPPORT DOTS")
         depths = []
         elongations = []
         pressures = []
@@ -475,15 +465,13 @@ class AutoInterpretation:
         return depths, elongations, pressures, temperatures, times
 
     def zips(self):
-        print("ZIPS")
         data = self.bias_and_splitting()
         incles = []
-        print(self.data[0])
         for d in self.data:
             incl = d.iloc[:, [5, 6]]
             incl.dropna(inplace=True, how='all')
             incles.append(incl)
-        intervals = [100 for d in data]
+        intervals = [self.delta for d in data]
         depths, elongations, pressures, temperatures, times = self.support_dots(incles, data, intervals)
         calctables = []
         for d, e, p, t in zip(depths, elongations, pressures, temperatures):
@@ -514,7 +502,7 @@ class AutoInterpretation:
                     temp_data = [data[i], ]
 
                     depths, elongations, pressures, temperatures, retiming = self.support_dots(temp_incles, temp_data,
-                                                                                               intervals=[50, ])
+                                                                                               intervals=[self.delta/2, ])
 
                     for d, e, p, te, tim in zip(depths, elongations, pressures, temperatures, retiming):
                         kt = len(d[nomer_polki])
