@@ -4,7 +4,7 @@ import datetime
 from PyQt5 import QtWidgets
 from statistics import median, mean
 from reportlab.pdfgen import canvas
-
+import joblib
 from Other import *
 from Interpretation import *
 from Plot import *
@@ -209,6 +209,9 @@ class MainWindow(QMainWindow):
             for i in self.testlist.selectedIndexes()[::-1]:
                 self.listmodel.removeRow(i.row())
                 self.ResearchsList.pop(i.row())
+        if e.key() == QtCore.Qt.Key_F10:
+            print("DUMP")
+            joblib.dump(self.ResearchsList[0], 'Ppl.bin')
 
     def stop_gif(self, dwd, st, td):
         self.dots_with_data = dwd

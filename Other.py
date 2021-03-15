@@ -150,27 +150,26 @@ class MeasurementsWidget(QWidget):
         with sql_query() as connection:
             cursor = connection.cursor()
             startdate = self.startdate.date().toString(Qt.LocalDate)
-            enddate=self.enddate.date().addDays(1).toString(Qt.LocalDate)
-
+            enddate = self.enddate.date().addDays(1).toString(Qt.LocalDate)
             Sql_Q = ''' SELECT ots_bn.sosmeasurement.meswellid,
-                                            ots_bn.sosmeasurementmtmeter.mtinterval,
-                                            ots_bn.sosmeasurementmtmeter.mtdate,
-                                            ots_bn.sosmeasurementmtmeter.mtpressure,
-                                            ots_bn.sosmeasurementmtmeter.mttemperature,
-                                            ots_bn.sosmeasurementmtmeter.mtcount,
-                                            ots_bn.sosmeasurementmtmeter.mtdepthstartdate,
-                                            ots_bn.sosmeasurementmtmeter.mtdepthinterval,
-                                            ots_bn.sosmeasurementmtmeter.mtdepthdate,
-                                            ots_bn.sosmeasurementmtmeter.mtdepth,
-                                            ots_bn.sosmeasurement.messtartdate,
-                                            ots_bn.sosmeasurement.mesid
-                                            from ots_bn.sosmeasurementmtmeter
-                                            INNER JOIN ots_bn.sosmeasurement
-                                            ON ots_bn.sosmeasurementmtmeter.mtmeasurementid = ots_bn.sosmeasurement.mesid
-                                            WHERE (ots_bn.sosmeasurement.mesoriginalid IS NULL) and
-                                                  (ots_bn.sosmeasurement.messtartdate >= :startdate) and
-                                                  (ots_bn.sosmeasurement.messtartdate <= :enddate) and
-                                                  (ots_bn.sosmeasurement.mesdeviceid != 'SP2UXDfKjUuyuV/EDzyNEA')'''
+                        ots_bn.sosmeasurementmtmeter.mtinterval,
+                        ots_bn.sosmeasurementmtmeter.mtdate,
+                        ots_bn.sosmeasurementmtmeter.mtpressure,
+                        ots_bn.sosmeasurementmtmeter.mttemperature,
+                        ots_bn.sosmeasurementmtmeter.mtcount,
+                        ots_bn.sosmeasurementmtmeter.mtdepthstartdate,
+                        ots_bn.sosmeasurementmtmeter.mtdepthinterval,
+                        ots_bn.sosmeasurementmtmeter.mtdepthdate,
+                        ots_bn.sosmeasurementmtmeter.mtdepth,
+                        ots_bn.sosmeasurement.messtartdate,
+                        ots_bn.sosmeasurement.mesid
+                        from ots_bn.sosmeasurementmtmeter
+                        INNER JOIN ots_bn.sosmeasurement
+                        ON ots_bn.sosmeasurementmtmeter.mtmeasurementid = ots_bn.sosmeasurement.mesid
+                        WHERE (ots_bn.sosmeasurement.mesoriginalid IS NULL) and
+                              (ots_bn.sosmeasurement.messtartdate >= :startdate) and
+                              (ots_bn.sosmeasurement.messtartdate <= :enddate) and
+                              (ots_bn.sosmeasurement.mesdeviceid != 'SP2UXDfKjUuyuV/EDzyNEA')'''
             if self.fieldcombobox.currentIndex() != 0:
                 if self.wellcombobox.currentIndex() != 0:
                     Sql_Q += 'and (ots_bn.sosmeasurement.meswellid = :wellid)'
@@ -180,7 +179,6 @@ class MeasurementsWidget(QWidget):
                     cursor.execute(Sql_Q, startdate=startdate, enddate=enddate)
             else:
                 cursor.execute(Sql_Q, startdate=startdate, enddate=enddate)
-
             rows = cursor.fetchall()
 
             for row in rows:
