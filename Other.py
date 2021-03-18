@@ -10,6 +10,9 @@ import numpy as np
 import pandas as pd
 import joblib
 import bisect
+import uuid, base64
+import datetime
+
 
 class MeasurementsWidget(QWidget):
 
@@ -69,11 +72,14 @@ class MeasurementsWidget(QWidget):
         self.measurelistview.setMaximumWidth(300)
         self.chosenmeasurelistview.setMaximumWidth(300)
 
-
     def connectUi(self):
         self.searchbtn.clicked.connect(self.search_for_measurements_from_db)
-        self.addbtn.clicked.connect(lambda: self.throw_measurement_between_lists(self.measurelistview, self.chosenmeasurelistview, self.notPpllist, self.Ppllist))
-        self.rmvbtn.clicked.connect(lambda: self.throw_measurement_between_lists(self.chosenmeasurelistview, self.measurelistview, self.Ppllist, self.notPpllist))
+        self.addbtn.clicked.connect(
+            lambda: self.throw_measurement_between_lists(self.measurelistview, self.chosenmeasurelistview,
+                                                         self.notPpllist, self.Ppllist))
+        self.rmvbtn.clicked.connect(
+            lambda: self.throw_measurement_between_lists(self.chosenmeasurelistview, self.measurelistview, self.Ppllist,
+                                                         self.notPpllist))
         self.fieldcombobox.currentIndexChanged.connect(self.get_well_names)
         self.wellcombobox.currentIndexChanged.connect(self.set_current_well)
         self.measurelistview.clicked.connect(lambda: self.draw_graph(0))
@@ -87,8 +93,6 @@ class MeasurementsWidget(QWidget):
         print(self.Ppllist)
         self.parent.receive_list(self.chosenmeasurelistview.model(), self.Ppllist)
         self.close()
-
-
 
     def draw_graph(self, list_id):
         if not list_id:
@@ -108,14 +112,13 @@ class MeasurementsWidget(QWidget):
                                     WHERE (ots_bn.soswell.welname = :name) and
                                             (ots_bn.soswell.welfieldid = :fieldid) ''',
                                    fieldid=self.currentfieldid,
-                                   name = self.currentwell)
+                                   name=self.currentwell)
                     self.currentwellid = cursor.fetchone()[0]
             else:
                 self.currentwell = None
                 self.currentwellid = None
         except:
             pass
-
 
     def get_field_names(self):
         with sql_query() as connection:
@@ -182,72 +185,73 @@ class MeasurementsWidget(QWidget):
             rows = cursor.fetchall()
 
             for row in rows:
-                    print(row)
-                    well_name, field_name = self.get_well_field_and_number(row[0]) # Скважина
-                    print(well_name, field_name)
-                    if (not only_field or field_name == self.currentfield) and (row[9] is not None) and (row[3] is not None):
+                print(row)
+                well_name, field_name = self.get_well_field_and_number(row[0])  # Скважина
+                print(well_name, field_name)
+                if (not only_field or field_name == self.currentfield) and (row[9] is not None) and (
+                        row[3] is not None):
 
-                        pressure_BLOB = row[3].read() # Давление
-                        if pressure_BLOB[2] == 1:
-                            bytes_len = int.from_bytes(pressure_BLOB[3:7], byteorder=byteorder)
-                            pressure = pd.Series(np.frombuffer(pylzma.decompress(pressure_BLOB[7:],
-                                                                                 maxlength=bytes_len), dtype=np.dtype('f')))
+                    pressure_BLOB = row[3].read()  # Давление
+                    if pressure_BLOB[2] == 1:
+                        bytes_len = int.from_bytes(pressure_BLOB[3:7], byteorder=byteorder)
+                        pressure = pd.Series(np.frombuffer(pylzma.decompress(pressure_BLOB[7:],
+                                                                             maxlength=bytes_len), dtype=np.dtype('f')))
+                    else:
+                        pressure = pd.Series(np.frombuffer(pressure_BLOB[3:], dtype=np.dtype('f')))
+
+                    pressure.dropna(inplace=True, how='all')
+                    if row[4] is not None:  # Температура
+                        temperature_BLOB = row[4].read()
+                        if temperature_BLOB[2] == 1:
+                            bytes_len = int.from_bytes(temperature_BLOB[3:7], byteorder=byteorder)
+                            temperature = pd.Series(np.frombuffer(pylzma.decompress(temperature_BLOB[7:],
+                                                                                    maxlength=bytes_len),
+                                                                  dtype=np.dtype('f')))
                         else:
-                            pressure = pd.Series(np.frombuffer(pressure_BLOB[3:], dtype=np.dtype('f')))
+                            temperature = pd.Series(np.frombuffer(temperature_BLOB[3:], dtype=np.dtype('f')))
+                    else:
+                        temperature = pd.Series((None for i in range(pressure.size)))
 
-                        pressure.dropna(inplace=True, how='all')
-                        if row[4] is not None: #Температура
-                            temperature_BLOB = row[4].read()
-                            if temperature_BLOB[2] == 1:
-                                bytes_len = int.from_bytes(temperature_BLOB[3:7], byteorder=byteorder)
-                                temperature = pd.Series(np.frombuffer(pylzma.decompress(temperature_BLOB[7:],
-                                                                                        maxlength=bytes_len),
-                                                                                        dtype=np.dtype('f')))
-                            else:
-                                temperature = pd.Series(np.frombuffer(temperature_BLOB[3:], dtype=np.dtype('f')))
-                        else:
-                            temperature = pd.Series((None for i in range(pressure.size)))
+                    temperature.dropna(inplace=True, how='all')
+                    depth_BLOB = row[9].read()  # Глубина
+                    bytes_len = int.from_bytes(depth_BLOB[3:7], byteorder=byteorder)
+                    depth = pd.Series(np.frombuffer(pylzma.decompress(depth_BLOB[7:],
+                                                                      maxlength=bytes_len), dtype=np.dtype('f')))
 
-                        temperature.dropna(inplace=True, how='all')
-                        depth_BLOB = row[9].read() #Глубина
-                        bytes_len = int.from_bytes(depth_BLOB[3:7], byteorder=byteorder)
-                        depth = pd.Series(np.frombuffer(pylzma.decompress(depth_BLOB[7:],
-                                                                          maxlength=bytes_len), dtype=np.dtype('f')))
+                    if row[1] is not None:  # Даты манометра
+                        mtStartDateTime = pd.to_datetime(row[10], dayfirst=True)
+                        BD_mt_delta = row[1]
+                        mtTimeDelta = pd.Timedelta(minutes=BD_mt_delta.minute, seconds=BD_mt_delta.second)
+                        mt_dates = pd.Series((mtStartDateTime + mtTimeDelta * i for i in range(len(pressure))))
+                    else:
+                        date_mt_BLOB = row[2].read()
+                        bytes_len = int.from_bytes(date_mt_BLOB[3:7], byteorder=byteorder)
+                        mt_dates = np.frombuffer(pylzma.decompress(date_mt_BLOB[7:], maxlength=bytes_len))
+                        time = pd.Timestamp(row[10])
+                        mt_dates = pd.to_datetime(mt_dates, unit='d', dayfirst=True, origin=pd.Timestamp(row[10]))
+                        mt_dates = mt_dates.to_series(index=None)
+                        mt_dates.reset_index(inplace=True, drop=True)
+                        mt_dates = mt_dates.apply(lambda x: x + pd.Timedelta(hours=time.hour, minutes=time.minute,
+                                                                             seconds=time.second))
 
-                        if row[1] is not None: # Даты манометра
-                            mtStartDateTime = pd.to_datetime(row[10], dayfirst=True)
-                            BD_mt_delta=row[1]
-                            mtTimeDelta = pd.Timedelta(minutes=BD_mt_delta.minute, seconds=BD_mt_delta.second)
-                            mt_dates = pd.Series((mtStartDateTime+mtTimeDelta*i for i in range(len(pressure))))
-                        else:
-                            date_mt_BLOB = row[2].read()
-                            bytes_len = int.from_bytes(date_mt_BLOB[3:7], byteorder=byteorder)
-                            mt_dates = np.frombuffer(pylzma.decompress(date_mt_BLOB[7:], maxlength=bytes_len))
-                            time = pd.Timestamp(row[10])
-                            mt_dates = pd.to_datetime(mt_dates, unit='d', dayfirst=True, origin=pd.Timestamp(row[10]))
-                            mt_dates = mt_dates.to_series(index=None)
-                            mt_dates.reset_index(inplace=True, drop=True)
-                            mt_dates = mt_dates.apply(lambda  x: x + pd.Timedelta(hours =time.hour, minutes=time.minute,
-                                                                                  seconds=time.second))
+                    if row[8] is not None:  # даты глубин
+                        date_depth_BLOB = row[8].read()
+                        bytes_len = int.from_bytes(date_depth_BLOB[3:7], byteorder=byteorder)
+                        dates_depth = np.frombuffer(pylzma.decompress(date_depth_BLOB[7:], maxlength=bytes_len))
+                        dates_depth = pd.Series(pd.to_datetime(dates_depth, unit='d',
+                                                               dayfirst=True, origin=pd.Timestamp('1899-12-30')))
+                    else:
+                        dpStartDateTime = pd.to_datetime(row[6], dayfirst=True)
+                        mtTimeDelta = pd.Timedelta(minutes=row[7].minute, seconds=row[7].second)
+                        dates_depth = pd.Series((dpStartDateTime + mtTimeDelta * i for i in range(len(depth))))
 
+                    data = pd.concat([mt_dates, pressure, temperature, dates_depth, depth], axis=1)
+                    Ppl = Interpretation.Ppl_fabric(field_name, well_name, data)
+                    Ppl.OTS_Well_ID = row[0]
+                    Ppl.OTS_Mes_ID = row[11]
+                    self.fullMeasurementList.append(Ppl)
 
-                        if row[8] is not None: #даты глубин
-                            date_depth_BLOB = row[8].read()
-                            bytes_len = int.from_bytes(date_depth_BLOB[3:7], byteorder=byteorder)
-                            dates_depth = np.frombuffer(pylzma.decompress(date_depth_BLOB[7:], maxlength=bytes_len))
-                            dates_depth = pd.Series(pd.to_datetime(dates_depth, unit = 'd',
-                                                                dayfirst=True, origin=pd.Timestamp('1899-12-30')))
-                        else:
-                            dpStartDateTime = pd.to_datetime(row[6], dayfirst=True)
-                            mtTimeDelta = pd.Timedelta(minutes=row[7].minute, seconds=row[7].second)
-                            dates_depth = pd.Series((dpStartDateTime+mtTimeDelta*i for i in range(len(depth))))
-
-                        data = pd.concat([mt_dates, pressure, temperature,dates_depth,depth], axis = 1)
-                        Ppl = Interpretation.Ppl_fabric(field_name, well_name, data)
-                        Ppl.OTS_Well_ID = row[0]
-                        self.fullMeasurementList.append(Ppl)
-
-        if len(self.fullMeasurementList)>0:
+        if len(self.fullMeasurementList) > 0:
             self.bi_divide()
 
     def bi_divide(self):
@@ -257,12 +261,13 @@ class MeasurementsWidget(QWidget):
         for measuarement in self.fullMeasurementList:
             try:
                 kt_pres = measuarement.data.iloc[:, 1].count()
-                #print(measuarement.data)
+                # print(measuarement.data)
                 measuarement.data.to_clipboard()
-                points300 = to_300_points(measuarement.data.iloc[:kt_pres,1])
-                time_length = (measuarement.data.iloc[kt_pres-1,0]-measuarement.data.iloc[0,0]).total_seconds()/86400
-                if time_length > 2 : time_length = 2
-                points300 = points300/points300.max()
+                points300 = to_300_points(measuarement.data.iloc[:kt_pres, 1])
+                time_length = (measuarement.data.iloc[kt_pres - 1, 0] - measuarement.data.iloc[
+                    0, 0]).total_seconds() / 86400
+                if time_length > 2: time_length = 2
+                points300 = points300 / points300.max()
                 points300 = points300.append(pd.Series(time_length))
                 points300 = points300.to_numpy().reshape(1, -1)
 
@@ -276,12 +281,11 @@ class MeasurementsWidget(QWidget):
                     self.notPpllist.append(measuarement)
                     self.leftmodel.appendRow(name)
             except:
-                print("ИСКЛЮЧЕНА:",  measuarement.field, measuarement.well_name)
+                print("ИСКЛЮЧЕНА:", measuarement.field, measuarement.well_name)
         self.measurelistview.setModel(self.leftmodel)
         self.chosenmeasurelistview.setModel(self.rightmodel)
         # print(len(self.Ppllist))
         # print(len(self.notPpllist))
-
 
     def throw_measurement_between_lists(self, listview_from, listview_to, list_from, list_to):
         index_list = listview_from.selectedIndexes()
@@ -292,7 +296,6 @@ class MeasurementsWidget(QWidget):
                 new_item = QtGui.QStandardItem(item_text)
                 listview_to.model().appendRow(new_item)
                 list_to.append(list_from.pop(index.row()))
-
 
     def get_well_field_and_number(self, ID):
         with sql_query() as connection:
@@ -308,7 +311,7 @@ class MeasurementsWidget(QWidget):
 
 
 def search_and_interpolate(searching_array, x, interpolate=True):
-    if searching_array.iloc[-1,0] < searching_array.iloc[0,0]:
+    if searching_array.iloc[-1, 0] < searching_array.iloc[0, 0]:
         searching_array = searching_array.iloc[::-1]
         searching_array.reset_index(inplace=True, drop=True)
 
@@ -327,11 +330,90 @@ def search_and_interpolate(searching_array, x, interpolate=True):
         return column2.iloc[left]
     else:
         if interpolate:
-            percent = (x - column1.iloc[left-1]) / (column1.iloc[right] - column1.iloc[left-1])
-            return column2.iloc[left-1] + abs((column2.iloc[right] - column2.iloc[left-1]) * percent)
+            percent = (x - column1.iloc[left - 1]) / (column1.iloc[right] - column1.iloc[left - 1])
+            return column2.iloc[left - 1] + abs((column2.iloc[right] - column2.iloc[left - 1]) * percent)
         else:
             return column2.iloc[left]
 
+
+def insert_data_to_sosresearch_table(Ppl):
+    resid = Ppl.resid
+    rescreateddatetime = datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')
+    resmoduletypeid = 'none'
+    resinterpretatorid = 'U5kpGq6aT42GXQopVH7PTA'
+    ressuborganization = Ppl.TP_id
+    resgeoligistorganizationid = Ppl.tzeh_id
+    resreserachtypeid = 281
+    resfieldid = Ppl.OTS_Field_ID
+    rescreatorid = 'U5kpGq6aT42GXQopVH7PTA'
+    resfirstmeasarementstamp = Ppl.first_measure_datetime
+    resgoal = 'Рпласт'
+    resstatusid = 20
+    reslastmeasarementstamp = Ppl.last_measure_datetime
+    resinbrief = 1  # ???
+    print(Ppl.well_name, resid, rescreateddatetime, resmoduletypeid, resinterpretatorid, ressuborganization,
+          resgeoligistorganizationid, resreserachtypeid, resfieldid, rescreatorid, resfirstmeasarementstamp,
+          resgoal, resstatusid, reslastmeasarementstamp, resinbrief)
+
+
+def insert_data_to_sosresearchresult_table(Ppl):
+    rsrrresearchid = Ppl.resid
+    rsrcriticalvolumegascontent = 20
+    rsrreckonspeedloss = 0
+    rsrpiperoughness = 0.0254
+    rsrdensityliquid = Ppl.ro
+    rsrresulmeasurementid = Ppl.OTS_Mes_ID
+    rsrinflowtechhaltime = 180  # ????????????????
+    rsrextractzaboyleveltypeid = 1  # ?????????
+
+    print(Ppl.well_name, rsrrresearchid, rsrcriticalvolumegascontent, rsrreckonspeedloss,
+          rsrpiperoughness, rsrdensityliquid, rsrresulmeasurementid, rsrinflowtechhaltime, rsrextractzaboyleveltypeid)
+
+
+def insert_data_to_sosresearchmeasurement_table(Ppl):
+
+    double_measure_in_sosmeasurement(Ppl)
+        # TODO Create remaining data for DB Fields
+    rsrresearchid = Ppl.resid
+    rmsmeasurementid = Ppl.OTS_New_Mes_ID
+    if Ppl.table_ind == 0:
+        rmsaslgorithmtype = 1
+        rmsdescentdensityliquid = Ppl.ro
+    else:
+        rmsaslgorithmtype = 2
+        rmsascentdensityliquid = Ppl.ro
+    rmsavgtgradient = Ppl.avg_temp_gradient
+
+
+
+    print(Ppl.well_name, )
+
+
+def double_measure_in_sosmeasurement(Ppl):
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        cursor.execute(''' SELECT * from ots_bn.sosmeasurement
+                    WHERE ots_bn.sosmeasurement.mesid = :mesid''',
+                       mesid=Ppl.OTS_Mes_ID)
+        row = list(cursor.fetchone())
+        temprow = list(row)
+        original_id = row[0]
+        row[0] = make_id()
+        Ppl.OTS_New_Mes_ID = row[0]
+        row[1] = Ppl.resid
+        row[15] = original_id
+        row[16] = 'U5kpGq6aT42GXQopVH7PTA'
+        row[17] = None
+        row[18] = None
+        row[22] = None
+        for i,j in zip(row,temprow):
+            if i != j : print(i, " - ", j, end='   |||||   ')
+        print('\n')
+        print(row)
+
+
+def make_id():
+    return base64.b64encode(uuid.uuid4().bytes)[:-2].decode()
 
 
 def search_and_interpolate_old(searching_array, x, xleft=True, interpolate=True):
@@ -369,6 +451,7 @@ def search_and_interpolate_old(searching_array, x, xleft=True, interpolate=True)
                         return column2[ind] + abs((column2[ind] - column2[ind + 1]) * percent)
                     return column2[ind]
     return 0
+
 
 @contextmanager
 def sql_query():

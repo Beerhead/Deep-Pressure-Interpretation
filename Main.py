@@ -9,6 +9,8 @@ from Other import *
 from Interpretation import *
 from Plot import *
 from Report import *
+import pyqtgraph as pg
+import pyqtgraph.exporters
 warnings.filterwarnings('ignore')
 
 
@@ -86,13 +88,17 @@ class MainWindow(QMainWindow):
         self.hl_graph_layout = QHBoxLayout()
         #self.hl_graph_layout.addWidget(self.plotWidget)
         self.hl_graph_layout.addWidget(self.plotWidget2)
+        # self.splitter1 = QSplitter(QtCore.Qt.Horizontal)
+        # self.splitter2 = QSplitter(QtCore.Qt.Vertical)
 
         self.VL1.addLayout(self.hltables)
+        self.VL1.addWidget(self.splitter1)
         self.VL1.addLayout(self.hl_graph_layout)
 
         self.VL2.addWidget(self.testlist)
         self.VL2.addLayout(self.GL)
         self.HL.addLayout(self.VL1)
+        self.HL.addWidget(self.splitter2)
         self.HL.addLayout(self.VL2)
         self.setCentralWidget(self.centralWidget)
 
@@ -210,8 +216,20 @@ class MainWindow(QMainWindow):
                 self.listmodel.removeRow(i.row())
                 self.ResearchsList.pop(i.row())
         if e.key() == QtCore.Qt.Key_F10:
-            print("DUMP")
-            joblib.dump(self.ResearchsList[0], 'Ppl.bin')
+            print("ТЫЩЩ")
+            for res in self.ResearchsList:
+                insert_data_to_sosresearch_table(res)
+                insert_data_to_sosresearchresult_table(res)
+                insert_data_to_sosresearchmeasurement_table(res)
+        if e.key() == QtCore.Qt.Key_F9:
+            print("TEST")
+            for res in self.ResearchsList:
+                print(res.avg_temp_gradient)
+
+
+
+
+
 
     def stop_gif(self, dwd, st, td):
         self.dots_with_data = dwd
@@ -282,6 +300,7 @@ class MainWindow(QMainWindow):
             self.ResearchsList[i].final_data = temp
             temp_pw = PlotWidget()
             self.ResearchsList[i].final_fig = temp_pw.plot(temp, save=True)
+        for res in self.ResearchsList: res.calc_avg_temp_gradient()
         self.interpreted = True
         self.movie.stop()
         self.gifdialog.hide()
@@ -567,6 +586,7 @@ class GifThread(QtCore.QThread):
         dwd, st = ai.zips()
         td = ai.bias_and_splitting()
         self.finish_signal.emit(dwd, st, td)
+
 
 
 app = QApplication(sys.argv)

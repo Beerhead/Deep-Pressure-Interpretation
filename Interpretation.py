@@ -11,54 +11,70 @@ from sys import byteorder
 import Other
 
 index = ['d4+A31plakuShf1sT9STqg', 'KP5sao1H3UK6UUOO5H/D4A',
-       '9GJ+Twe4e0mFcQjZkVD2SQ', 'N43A6ZYo0kGxs9l2dXuFGg',
-       'BJAEBMmWd0iOs+Do9bZQow', 'FQGY5JRISkiX3zA9vACUcA',
-       'XDjnM3vEvkqOdxy7eXGRng', 'oJoVYbYX60qMPvrSPvSOww',
-       'P4bX5rQoTUGIsv7IGGgCyA', '4i6xzt9yM02co5LjZPpBlw',
-       'rGQSV/1mTU2vonzz8c3+5g', 'lz+Hn3TJ5EmOZJ0SlFsLig',
-       'ljV0DivalEqVsTsEaOhf9Q', 's3tu+JZVG0uMZwzkQsbONA',
-       'W7DbyFVNQU2O08sXoRhC/w', '8bIFLiWjTU2OYkGvhdPUiA',
-       'DE8zAiQJlk+3FVNPVqewDQ', 'bWCOPj0Pm06wKXeqcSZTcw',
-       'kKkS9q4SO0W8jYv9aMWCFw', 'sVqSoiaK/kiNqqX/p55B0g',
-       '/ttwA0UDHUCh+ewqp86rRQ', '6QTgVIBI2ESPMH9uxXNthA',
-       'SSgo1Mk3nUOGqDU5xWrMLA', '9eTuODmz10+c6WOnNVvpWQ',
-       '3nHHNXnqzEiBTOmtwTvdSA', 'nWETMqQzFUGyJvxJJD1lpg',
-       '8yjD2kzknEyW98zyQVHAtQ', '6G3itilU+EaotAz+b/npQA',
-       'WtyowFIw/0KlzYfX2knV+Q', '5YDgbMsjJEChloLMYMq7Zw',
-       'zv9zmmLrl0K8rPXPxqq9lA', 'lL9VzbdM9ESD5D+XX0r1gA',
-       'AGDfWJdQf06qRL1FxnHK1A', 'Z70Tidoyzk6qPRND3GqnRA',
-       'ZOum5njqOk6yCVokTR3uZg', 'DGhwyaj9wkmhawGxQVHajQ',
-       'dqU/yoxTQEuSckKxDq0XjA', 'rVW6F7vK0ky4YL9l9vdMRQ',
-       'XvFcM69cX0yL+JfS9ssiYg', 'LQYLj9WtHUe6qPUDMLBmbw',
-       'boKlkyhA4kSlTEFXWs0ikQ', 'oi5DQYPvoEGJkd2RAQ5OlA',
-       'jybjSiKUhEi8UFo9OC/f0Q', 'IJ0CVh3Aak6IIoyDKmgYJg',
-       '+AsUpknvTk68g//Q+/U3iw', 'ecG/ppwmakqWH/mNWhYNXA',
-       '07+m5sNNR0uVLbU64Ww5JQ', 'ZjLGZWls7USTgUNA5CvTbg',
-       'AYQsW06moUy0UblPlG57gQ', 'Up3oBlfaREm1WppiIWSfng',
-       'xHuwmEb/nUmHJ0s39aT6nQ', 'tdkIjfJo5UScNvrk8r6c+A',
-       'uxtv8dXBCEqSqYyZxJ3CLg', 'cBGI/G/BCEC0ietd0z47/Q',
-       'g/Um5pqeqU6x0tejw1SUwg', 'lYZfF4U+DESA4OJ3nZxikA',
-       'Up/+cZsrHE6WLgU+HGCrwA', 'UZj9PYU3nUaNYsfanvXi+g',
-       'rvRHY5GyZ06PUDqDx+d4SA', 'Wrje3M2mIE+/NPxgS8dL7g',
-       'PGfeA4xlZkGF9K+0XoEP/A']
-d = ['Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ',
-     'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ',
-     'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ',
-     'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog',
-     'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog',
-     'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog',
-     'XX4ix3Zc1U6qlE7z7U2dFA', 'XX4ix3Zc1U6qlE7z7U2dFA', 'XX4ix3Zc1U6qlE7z7U2dFA', 'XX4ix3Zc1U6qlE7z7U2dFA',
-     'XX4ix3Zc1U6qlE7z7U2dFA', 'XX4ix3Zc1U6qlE7z7U2dFA', 'XX4ix3Zc1U6qlE7z7U2dFA', 'XX4ix3Zc1U6qlE7z7U2dFA',
-     'XX4ix3Zc1U6qlE7z7U2dFA', 'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig',
-     'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig',
-     'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig',
-     'QJofzcONpE2zc67YmsJNig', 'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ', 'bz/8lz6ekkGHgMIGKW0DLw',
-     'bz/8lz6ekkGHgMIGKW0DLw', 'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ',
-     'bz/8lz6ekkGHgMIGKW0DLw', 'bz/8lz6ekkGHgMIGKW0DLw', 'bz/8lz6ekkGHgMIGKW0DLw', 'bz/8lz6ekkGHgMIGKW0DLw',
-     'Rl2eZ/jJOkC5wWER/HenaQ', 'bz/8lz6ekkGHgMIGKW0DLw', 'Rl2eZ/jJOkC5wWER/HenaQ', 'bz/8lz6ekkGHgMIGKW0DLw',
+         '9GJ+Twe4e0mFcQjZkVD2SQ', 'N43A6ZYo0kGxs9l2dXuFGg',
+         'BJAEBMmWd0iOs+Do9bZQow', 'FQGY5JRISkiX3zA9vACUcA',
+         'XDjnM3vEvkqOdxy7eXGRng', 'oJoVYbYX60qMPvrSPvSOww',
+         'P4bX5rQoTUGIsv7IGGgCyA', '4i6xzt9yM02co5LjZPpBlw',
+         'rGQSV/1mTU2vonzz8c3+5g', 'lz+Hn3TJ5EmOZJ0SlFsLig',
+         'ljV0DivalEqVsTsEaOhf9Q', 's3tu+JZVG0uMZwzkQsbONA',
+         'W7DbyFVNQU2O08sXoRhC/w', '8bIFLiWjTU2OYkGvhdPUiA',
+         'DE8zAiQJlk+3FVNPVqewDQ', 'bWCOPj0Pm06wKXeqcSZTcw',
+         'kKkS9q4SO0W8jYv9aMWCFw', 'sVqSoiaK/kiNqqX/p55B0g',
+         '/ttwA0UDHUCh+ewqp86rRQ', '6QTgVIBI2ESPMH9uxXNthA',
+         'SSgo1Mk3nUOGqDU5xWrMLA', '9eTuODmz10+c6WOnNVvpWQ',
+         '3nHHNXnqzEiBTOmtwTvdSA', 'nWETMqQzFUGyJvxJJD1lpg',
+         '8yjD2kzknEyW98zyQVHAtQ', '6G3itilU+EaotAz+b/npQA',
+         'WtyowFIw/0KlzYfX2knV+Q', '5YDgbMsjJEChloLMYMq7Zw',
+         'zv9zmmLrl0K8rPXPxqq9lA', 'lL9VzbdM9ESD5D+XX0r1gA',
+         'AGDfWJdQf06qRL1FxnHK1A', 'Z70Tidoyzk6qPRND3GqnRA',
+         'ZOum5njqOk6yCVokTR3uZg', 'DGhwyaj9wkmhawGxQVHajQ',
+         'dqU/yoxTQEuSckKxDq0XjA', 'rVW6F7vK0ky4YL9l9vdMRQ',
+         'XvFcM69cX0yL+JfS9ssiYg', 'LQYLj9WtHUe6qPUDMLBmbw',
+         'boKlkyhA4kSlTEFXWs0ikQ', 'oi5DQYPvoEGJkd2RAQ5OlA',
+         'jybjSiKUhEi8UFo9OC/f0Q', 'IJ0CVh3Aak6IIoyDKmgYJg',
+         '+AsUpknvTk68g//Q+/U3iw', 'ecG/ppwmakqWH/mNWhYNXA',
+         '07+m5sNNR0uVLbU64Ww5JQ', 'ZjLGZWls7USTgUNA5CvTbg',
+         'AYQsW06moUy0UblPlG57gQ', 'Up3oBlfaREm1WppiIWSfng',
+         'xHuwmEb/nUmHJ0s39aT6nQ', 'tdkIjfJo5UScNvrk8r6c+A',
+         'uxtv8dXBCEqSqYyZxJ3CLg', 'cBGI/G/BCEC0ietd0z47/Q',
+         'g/Um5pqeqU6x0tejw1SUwg', 'lYZfF4U+DESA4OJ3nZxikA',
+         'Up/+cZsrHE6WLgU+HGCrwA', 'UZj9PYU3nUaNYsfanvXi+g',
+         'rvRHY5GyZ06PUDqDx+d4SA', 'Wrje3M2mIE+/NPxgS8dL7g',
+         'PGfeA4xlZkGF9K+0XoEP/A']
+d = ['Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ',
+     'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ',
+     'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ',
+     'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ',
+     'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ',
+     'Rl2eZ/jJOkC5wWER/HenaQ', 'Rl2eZ/jJOkC5wWER/HenaQ',
+     'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog',
+     'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog',
+     'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog',
+     'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog',
+     'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog',
+     'z2CdP3RuN0GYqifU5kBRog', 'z2CdP3RuN0GYqifU5kBRog',
+     'XX4ix3Zc1U6qlE7z7U2dFA', 'XX4ix3Zc1U6qlE7z7U2dFA',
+     'XX4ix3Zc1U6qlE7z7U2dFA', 'XX4ix3Zc1U6qlE7z7U2dFA',
+     'XX4ix3Zc1U6qlE7z7U2dFA', 'XX4ix3Zc1U6qlE7z7U2dFA',
+     'XX4ix3Zc1U6qlE7z7U2dFA', 'XX4ix3Zc1U6qlE7z7U2dFA',
+     'XX4ix3Zc1U6qlE7z7U2dFA', 'QJofzcONpE2zc67YmsJNig',
+     'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig',
+     'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig',
+     'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig',
+     'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig',
+     'QJofzcONpE2zc67YmsJNig', 'QJofzcONpE2zc67YmsJNig',
+     'QJofzcONpE2zc67YmsJNig', 'Rl2eZ/jJOkC5wWER/HenaQ',
+     'Rl2eZ/jJOkC5wWER/HenaQ', 'bz/8lz6ekkGHgMIGKW0DLw',
+     'bz/8lz6ekkGHgMIGKW0DLw', 'Rl2eZ/jJOkC5wWER/HenaQ',
+     'Rl2eZ/jJOkC5wWER/HenaQ', '1AD7PvB7HUiPgfv/uik6lQ',
+     'bz/8lz6ekkGHgMIGKW0DLw', 'bz/8lz6ekkGHgMIGKW0DLw',
+     'bz/8lz6ekkGHgMIGKW0DLw', 'bz/8lz6ekkGHgMIGKW0DLw',
+     'Rl2eZ/jJOkC5wWER/HenaQ', 'bz/8lz6ekkGHgMIGKW0DLw',
+     'Rl2eZ/jJOkC5wWER/HenaQ', 'bz/8lz6ekkGHgMIGKW0DLw',
      'bz/8lz6ekkGHgMIGKW0DLw']
 
-dict_suborg = {i:d for i,d in zip(index, d)}
+dict_suborg = {i: d for i, d in zip(index, d)}
+
 
 class Ppl:
 
@@ -66,6 +82,7 @@ class Ppl:
         self.field = field
         self.well_name = wname
         self.data = data
+        self.resid = Other.make_id()
         self.table_models = None
         self.checks = None
         self.table_ind = None
@@ -79,12 +96,24 @@ class Ppl:
         self.layer = None
         self.OTS_Field_ID = None
         self.OTS_Well_ID = None
+        self.OTS_Mes_ID = None
+        self.OTS_New_Mes_ID = None
         self.TP_id = None
         self.region = None
         self.tzeh_id = None
+        self.avg_temp_gradient = None
 
         if not new:
             self.get_well_params_old()
+
+    def calc_avg_temp_gradient(self):
+        if self.table_ind is None: return
+        model = self.table_models[self.table_ind]
+        dT = float(model.item(model.rowCount() - 1, 3).text()) - float(model.item(1, 3).text())
+        dH = float(model.item(model.rowCount() - 1, 0).text()) - float(model.item(model.rowCount() - 1, 1).text()) - \
+             float(model.item(1, 0).text()) + float(model.item(1, 1).text())
+        self.avg_temp_gradient = 100 * dT / dH
+
 
     def get_well_params(self):
         def sql_bed(bed_id):
@@ -126,7 +155,8 @@ class Ppl:
                 depth = pd.Series(np.frombuffer(rows[0].read()[3:], dtype=np.dtype('f')))
             try:
                 bytes_len = int.from_bytes(rows[1].read()[3:7], byteorder=byteorder)
-                elong = pd.Series(np.frombuffer(pylzma.decompress(rows[1].read()[7:], maxlength=bytes_len), dtype=np.dtype('f')))
+                elong = pd.Series(
+                    np.frombuffer(pylzma.decompress(rows[1].read()[7:], maxlength=bytes_len), dtype=np.dtype('f')))
             except:
                 elong = pd.Series(np.frombuffer(rows[1].read()[3:], dtype=np.dtype('f')))
             self.incl = pd.concat([depth, elong], axis=1)
@@ -134,8 +164,8 @@ class Ppl:
             temp_pressure_time_series = self.data.iloc[:, 0]
             temp_pressure_time_series.dropna(inplace=True)
             self.research_date = str(temp_pressure_time_series[len(temp_pressure_time_series) // 2])[:10]
-            self.first_measure_datetime = str(temp_pressure_time_series[0])
-            self.last_measure_datetime = str(temp_pressure_time_series[-1])
+            self.first_measure_datetime = str(temp_pressure_time_series.iloc[0])
+            self.last_measure_datetime = str(temp_pressure_time_series.iloc[-1])
 
             # cursor.execute('''SELECT ots_bn.sosorganizationrelation.orrparentid
             #                 from ots_bn.sosorganizationrelation
@@ -150,8 +180,6 @@ class Ppl:
             # rows = cursor.fetchone()
             # self.region = rows[0]
             self.TP_id = dict_suborg[self.tzeh_id]
-
-
 
     def get_well_params_old(self):
         with Other.sql_query_old('FWDB.db') as query:
@@ -185,13 +213,13 @@ class Ppl:
 
 class AutoInterpretation:
 
-    def __init__(self, vhoddata, incl=None, alt=False, delta = 100):
+    def __init__(self, vhoddata, incl=None, alt=False, delta=100):
         self.data = vhoddata
         self.alt = alt
         self.delta = delta
         if incl:
-            for d,i,index in zip(self.data,incl,range(len(self.data))):
-                self.data[index] = pd.concat([d, i], axis = 1)
+            for d, i, index in zip(self.data, incl, range(len(self.data))):
+                self.data[index] = pd.concat([d, i], axis=1)
 
     def transform_data(self):
         self.fed_data = []
@@ -575,7 +603,8 @@ class AutoInterpretation:
                     temp_data = [data[i], ]
 
                     depths, elongations, pressures, temperatures, retiming = self.support_dots(temp_incles, temp_data,
-                                                                                               intervals=[self.delta/2, ])
+                                                                                               intervals=[
+                                                                                                   self.delta / 2, ])
 
                     for d, e, p, te, tim in zip(depths, elongations, pressures, temperatures, retiming):
                         kt = len(d[nomer_polki])
@@ -594,4 +623,4 @@ class AutoInterpretation:
 
 
 def Ppl_fabric(field, wname, data):
-        return Ppl(field, wname, data, True)
+    return Ppl(field, wname, data, True)
