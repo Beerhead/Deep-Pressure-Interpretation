@@ -1,4 +1,5 @@
 import pyqtgraph as pg
+from pyqtgraph.exporters import ImageExporter
 from PyQt5 import QtCore, QtGui
 from PyQt5.Qt import *
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -69,10 +70,15 @@ class PlotWidget2(pg.PlotWidget):
         self.plotItem.getViewBox().autoRange()
 
         if save:
-            # fig = BytesIO()
-            # self.figure.savefig(fig, format='png')
-            # return fig
-            pass
+            exporter = ImageExporter(self.plotItem)
+            exporter.parameters()['width'] = 580
+            exporter.parameters()['height'] = 450
+            buffer = QBuffer()
+            buffer.open(QIODevice.ReadWrite)
+            exporter.export(toBytes=True).save(buffer, "PNG")
+            buffer.seek(0)
+            fig = BytesIO(buffer.readAll())
+            return fig
         else:
             if times is not None:
                 self.button1.setVisible(True)

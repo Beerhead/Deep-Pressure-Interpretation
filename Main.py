@@ -1,4 +1,5 @@
 import sys
+import pathlib
 import warnings
 import datetime
 from PyQt5 import QtWidgets
@@ -56,7 +57,7 @@ class MainWindow(QMainWindow):
         self.ch_box_lay.addWidget(self.rb1)
         self.ch_box_lay.addWidget(self.rb2)
         self.ch_box_lay.setAlignment(Qt.AlignCenter)
-        self.deltaEdit = QLineEdit("100")
+        self.deltaEdit = QLineEdit("50")
         self.deltaEdit.setAlignment(Qt.AlignCenter)
         self.deltaEdit.setMaximumWidth(60)
         self.deltaEdit.setValidator(QIntValidator(1, 1000))
@@ -92,13 +93,13 @@ class MainWindow(QMainWindow):
         # self.splitter2 = QSplitter(QtCore.Qt.Vertical)
 
         self.VL1.addLayout(self.hltables)
-        self.VL1.addWidget(self.splitter1)
+        #self.VL1.addWidget(self.splitter1)
         self.VL1.addLayout(self.hl_graph_layout)
 
         self.VL2.addWidget(self.testlist)
         self.VL2.addLayout(self.GL)
         self.HL.addLayout(self.VL1)
-        self.HL.addWidget(self.splitter2)
+       # self.HL.addWidget(self.splitter2)
         self.HL.addLayout(self.VL2)
         self.setCentralWidget(self.centralWidget)
 
@@ -217,24 +218,32 @@ class MainWindow(QMainWindow):
                 self.ResearchsList.pop(i.row())
         if e.key() == QtCore.Qt.Key_F10:
             print("ТЫЩЩ")
-            for res in self.ResearchsList:
+            for res in [self.ResearchsList[0]]:
+                # res.final_data.to_clipboard()
                 insert_data_to_sosresearch_table(res)
-                insert_data_to_sosresearchresult_table(res)
-                insert_data_to_sosresearchmeasurement_table(res)
+                # insert_data_to_sosresearchresult_table(res)
+                # insert_data_to_sosresearchmeasurement_table(res)
+                # make_shelfs_blob(res)
+                # insert_data_to_sosresearchgraph_table(res)
+                # insert_data_to_sosresearchmarkermeasurement_table(res)
         if e.key() == QtCore.Qt.Key_F9:
             print("TEST")
             for res in self.ResearchsList:
-                print(res.avg_temp_gradient)
+                print(res.divider_points)
+                print(res.final_data.iloc[0,0])
+                print(type(res.final_data.iloc[0, 0]))
 
 
 
 
 
 
-    def stop_gif(self, dwd, st, td):
+    def stop_gif(self, dwd, st, td, cd=None):
         self.dots_with_data = dwd
         self.support_times = st
-        temp_dfs = td
+        temp_dfs, central_dots = td, cd
+
+
         for i, data in enumerate(self.dots_with_data):
             model_pair = []
             ro_pair = []
@@ -248,6 +257,7 @@ class MainWindow(QMainWindow):
                 ppl_pair.append(ppl)
                 f_type_pair.append(f_type)
                 checks_pair.append(checks)
+            self.ResearchsList[i].divider_points = cd[i]
             self.ResearchsList[i].table_models = model_pair
             self.ResearchsList[i].checks = checks_pair
             self.ResearchsList[i].sup_times = self.support_times[i]
@@ -298,9 +308,12 @@ class MainWindow(QMainWindow):
             dep.reset_index(inplace=True, drop=True)
             temp = pd.concat([pres, dep], axis=1)
             self.ResearchsList[i].final_data = temp
-            temp_pw = PlotWidget()
+            temp_pw = PlotWidget2()
             self.ResearchsList[i].final_fig = temp_pw.plot(temp, save=True)
-        for res in self.ResearchsList: res.calc_avg_temp_gradient()
+        for res in self.ResearchsList:
+            res.calc_avg_temp_gradient()
+            res.calc_phase_borders()
+            res.determine_static_level()
         self.interpreted = True
         self.movie.stop()
         self.gifdialog.hide()
@@ -386,6 +399,9 @@ class MainWindow(QMainWindow):
                                   'Пластовое давление на ВДП по спуску - ' + str(ppls[0]) + '\n' +
                                   'Пластовое давление на ВДП по подъему - ' + str(ppls[1]))
             self.plotWidget2.plot(self.ResearchsList[temp_ind].final_data, checked_sup_times)
+            self.ResearchsList[temp_ind].calc_avg_temp_gradient()
+            self.ResearchsList[temp_ind].calc_phase_borders()
+            self.ResearchsList[temp_ind].determine_static_level()
         else:
             self.plotWidget.plot(self.ResearchsList[temp_ind].data)
             self.reslabel.setText('Данные по скважине' + '\n' +
@@ -396,10 +412,11 @@ class MainWindow(QMainWindow):
 
     def reports(self):
 
-        fold = "\Reports\\"
+        fold = r"D:\Interpretator 9000\Else\Reports"
         for i, res in enumerate(self.ResearchsList):
+
             filename = str(res.field) + " " + str(res.well_name) + '.pdf'
-            filepath = os.getcwd() + fold + filename
+            filepath = (pathlib.Path('D:/') / 'Interpretator 9000' / 'Else' / 'Reports' / filename).__str__()
             cvs = canvas.Canvas(filepath)
             fig = self.ResearchsList[i].final_fig
             fig.seek(0)
@@ -569,7 +586,7 @@ class MainWindow(QMainWindow):
 
 
 class GifThread(QtCore.QThread):
-    finish_signal = pyqtSignal(object, object, object)
+    finish_signal = pyqtSignal(object, object, object, object)
 
     def __init__(self, parent=None,incl=None, alt=False, delta = 100):
         QtCore.QThread.__init__(self, parent)
@@ -584,8 +601,8 @@ class GifThread(QtCore.QThread):
         else:
             ai = AutoInterpretation(self.data,incl=self.incl)
         dwd, st = ai.zips()
-        td = ai.bias_and_splitting()
-        self.finish_signal.emit(dwd, st, td)
+        td, cd = ai.bias_and_splitting()
+        self.finish_signal.emit(dwd, st, td,cd)
 
 
 

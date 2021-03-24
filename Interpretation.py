@@ -9,6 +9,7 @@ from functools import lru_cache
 import pylzma
 from sys import byteorder
 import Other
+from collections import Counter
 
 index = ['d4+A31plakuShf1sT9STqg', 'KP5sao1H3UK6UUOO5H/D4A',
          '9GJ+Twe4e0mFcQjZkVD2SQ', 'N43A6ZYo0kGxs9l2dXuFGg',
@@ -102,9 +103,58 @@ class Ppl:
         self.region = None
         self.tzeh_id = None
         self.avg_temp_gradient = None
-
+        self.GOB = None
+        self.OWB = None
+        self.GWB = None
+        self.static_level = None
+        self.max_depth = None
+        self.depth_pressure_temperature_data=None
+        self.divider_points = None
         if not new:
             self.get_well_params_old()
+
+    def make_depth_pressure_temperature_data(self):
+        if self.final_data is None: return
+        self.final_data.to_clipboard()
+        S1 = self.final_data.iloc[:, 4]
+        S1.dropna(inplace=True, how='all')
+        S2, S3 = pd.Series(), pd.Series()
+        DFPres = self.final_data.iloc[:, [0,1]]
+        DFTemp = self.final_data.iloc[:, [0,2]]
+        for i in range(S1.size):
+            S2 = S2.append(pd.Series([Other.search_and_interpolate(DFPres, self.final_data.iloc[i, 3])]), ignore_index=True)
+            S3 = S3.append(pd.Series([Other.search_and_interpolate(DFTemp, self.final_data.iloc[i, 3])]), ignore_index=True)
+        self.depth_pressure_temperature_data = pd.concat([S1, S2, S3], axis = 1)
+        self.depth_pressure_temperature_data.to_clipboard()
+
+    def determine_static_level(self):
+        if self.GOB:
+            self.static_level = self.precise_calc_static_level(self.GOB)
+            self.GOB = self.static_level
+            return
+        if self.GWB:
+            self.static_level = self.precise_calc_static_level(self.GWB)
+            self.GWB = self.static_level
+
+    def precise_calc_static_level(self, reference_point):
+        low_bound = int(max(1, reference_point-50))
+        high_bound = int(min(self.max_depth, reference_point+50))
+        tempDF=self.final_data.iloc[:, [4, 3]]
+        tempDF1 = tempDF.dropna(how='all')
+        tempDF = self.final_data.iloc[:, [0, 1]]
+        tempDF2 = tempDF.dropna(how='all')
+        prev_pres = 9000
+        for i in range(low_bound, high_bound):
+            time_depth = Other.search_and_interpolate_old(tempDF1, i)
+            new_pres = Other.search_and_interpolate(tempDF2, time_depth)
+            #print(i, time_depth, new_pres, prev_pres, (new_pres - prev_pres)*10)
+            if (new_pres - prev_pres)*10 > 0.7:
+                return i
+            else:
+                prev_pres = new_pres
+        return reference_point
+
+
 
     def calc_avg_temp_gradient(self):
         if self.table_ind is None: return
@@ -113,6 +163,14 @@ class Ppl:
         dH = float(model.item(model.rowCount() - 1, 0).text()) - float(model.item(model.rowCount() - 1, 1).text()) - \
              float(model.item(1, 0).text()) + float(model.item(1, 1).text())
         self.avg_temp_gradient = 100 * dT / dH
+
+    def calc_phase_borders(self):
+        if self.table_models is None: return
+        model = self.table_models[self.table_ind]
+        types_list = [model.item(i, 5).text() for i in range(1, model.rowCount())]
+        depth_list = [float(model.item(i, 0).text()) for i in range(1, model.rowCount())]
+        self.GOB, self.OWB, self.GWB = calc_borders(types_list, depth_list)
+
 
 
     def get_well_params(self):
@@ -164,8 +222,8 @@ class Ppl:
             temp_pressure_time_series = self.data.iloc[:, 0]
             temp_pressure_time_series.dropna(inplace=True)
             self.research_date = str(temp_pressure_time_series[len(temp_pressure_time_series) // 2])[:10]
-            self.first_measure_datetime = str(temp_pressure_time_series.iloc[0])
-            self.last_measure_datetime = str(temp_pressure_time_series.iloc[-1])
+            self.first_measure_datetime = temp_pressure_time_series.iloc[0]
+            self.last_measure_datetime = temp_pressure_time_series.iloc[-1]
 
             # cursor.execute('''SELECT ots_bn.sosorganizationrelation.orrparentid
             #                 from ots_bn.sosorganizationrelation
@@ -180,6 +238,8 @@ class Ppl:
             # rows = cursor.fetchone()
             # self.region = rows[0]
             self.TP_id = dict_suborg[self.tzeh_id]
+            self.max_depth = self.data.iloc[:, 4].max()
+            print(self.max_depth)
 
     def get_well_params_old(self):
         with Other.sql_query_old('FWDB.db') as query:
@@ -226,6 +286,7 @@ class AutoInterpretation:
         for d in self.data:
             kt_pres = d.iloc[:, 0].count()
             kt_dep = d.iloc[:, 4].count()
+            print('KT = ', kt_pres, " KD = ", kt_dep)
             templistp = []
             for p in range(1, kt_pres - 1):
                 templistp.append((d.iloc[p + 1, 1] - d.iloc[p - 1, 1]) / (d.iloc[p + 1, 0] -
@@ -473,9 +534,12 @@ class AutoInterpretation:
     @lru_cache()
     def bias_and_splitting(self):
         indexes = self.divide_et_impera()
+        print(indexes)
         freshdata = []
+        central_dots=[]
         for i, d in enumerate(self.data):
             ind = indexes[i]
+            central_dots.append([(ind[0] + ind[1]) / 2, (ind[2] + ind[3]) / 2])
             delimeter_pres = int((ind[0] + ind[1]) / 2)
             delimeter_depth = int((ind[2] + ind[3]) / 2)
             dt1 = d.iloc[ind[0], 0] - d.iloc[ind[2], 3]
@@ -501,7 +565,7 @@ class AutoInterpretation:
             db2 = pd.concat([pre_db2_1, pre_db2_2], axis=1)
             double_data = [db1, db2]
             freshdata.append(double_data)
-        return freshdata
+        return freshdata, central_dots
 
     def support_dots(self, incles, data, intervals):
         depths = []
@@ -566,7 +630,7 @@ class AutoInterpretation:
         return depths, elongations, pressures, temperatures, times
 
     def zips(self):
-        data = self.bias_and_splitting()
+        data,_ = self.bias_and_splitting()
         incles = []
         for d in self.data:
             incl = d.iloc[:, [5, 6]]
@@ -601,7 +665,6 @@ class AutoInterpretation:
                 if cond1 or cond2 or cond3 or len(polka) < 7:
                     temp_incles = [incles[i], ]
                     temp_data = [data[i], ]
-
                     depths, elongations, pressures, temperatures, retiming = self.support_dots(temp_incles, temp_data,
                                                                                                intervals=[
                                                                                                    self.delta / 2, ])
@@ -624,3 +687,47 @@ class AutoInterpretation:
 
 def Ppl_fabric(field, wname, data):
     return Ppl(field, wname, data, True)
+
+def calc_borders(type_list, depth_shelfs):
+    def disintegrate_abortions(type_list):
+        new_list = list(type_list)
+        length = len(new_list)
+        if length < 5: return
+        for j in range(2, length - 3):
+            left = [new_list[j - 2], new_list[j - 1]]
+            right = [new_list[j + 1], new_list[j + 2]]
+            if (new_list[j] not in left) and (new_list[j] not in right):
+                if len(set(left).intersection(set(right))) == 0:
+                    continue
+                counter = Counter(left + right)
+                new_list[j] = counter.most_common(1)[0][0]
+
+        return new_list
+
+    GOB = None
+    OWB = None
+    GWB = None
+    type_list = disintegrate_abortions(type_list)
+    unique_set = set(type_list)
+    sorted_list_of_phases = sorted(unique_set)
+    #print(' len   =    ', len(unique_set))
+    if len(unique_set) == 2:
+        index = type_list.index(sorted_list_of_phases[-1])
+        if sorted_list_of_phases == ['Gas', 'Oil']:
+            GOB = (depth_shelfs[index] + depth_shelfs[index - 1]) / 2
+        elif sorted_list_of_phases == ['Oil', 'Water']:
+            OWB = (depth_shelfs[index] + depth_shelfs[index - 1]) / 2
+        elif sorted_list_of_phases == ['Gas', 'Water']:
+            GWB = (depth_shelfs[index] + depth_shelfs[index - 1]) / 2
+    elif len(unique_set) == 3:
+        sequence = []
+        for i in type_list:
+            if i not in sequence:
+                sequence.append(i)
+        if sequence == ['Gas', 'Oil', 'Water']:
+            index1 = type_list.index(sorted_list_of_phases[1])
+            index2 = type_list.index(sorted_list_of_phases[2])
+            GOB = (depth_shelfs[index1] + depth_shelfs[index1 - 1]) / 2
+            OWB = (depth_shelfs[index2] + depth_shelfs[index2 - 1]) / 2
+    #print(type_list)
+    return GOB, OWB, GWB

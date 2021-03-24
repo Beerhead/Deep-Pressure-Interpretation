@@ -12,6 +12,7 @@ import joblib
 import bisect
 import uuid, base64
 import datetime
+from Plot import PlotWidget
 
 
 class MeasurementsWidget(QWidget):
@@ -34,10 +35,12 @@ class MeasurementsWidget(QWidget):
         self.to_analysis_btn = QPushButton('Добавить в анализ выбранное')
         self.startdate = QDateEdit()
         self.startdate.setCalendarPopup(True)
-        self.startdate.setDate(QDate.currentDate().addDays(-1))
+        #self.startdate.setDate(QDate.currentDate().addDays(-1))
+        self.startdate.setDate(QDate(2021, 6, 15))
         self.enddate = QDateEdit()
         self.enddate.setCalendarPopup(True)
-        self.enddate.setDate(QDate.currentDate())
+        #self.enddate.setDate(QDate.currentDate())
+        self.enddate.setDate(QDate(2021, 6, 16))
         self.fieldcombobox = QComboBox()
         self.fieldcombobox.addItems(self.get_field_names())
         self.wellcombobox = QComboBox()
@@ -190,7 +193,6 @@ class MeasurementsWidget(QWidget):
                 print(well_name, field_name)
                 if (not only_field or field_name == self.currentfield) and (row[9] is not None) and (
                         row[3] is not None):
-
                     pressure_BLOB = row[3].read()  # Давление
                     if pressure_BLOB[2] == 1:
                         bytes_len = int.from_bytes(pressure_BLOB[3:7], byteorder=byteorder)
@@ -251,6 +253,7 @@ class MeasurementsWidget(QWidget):
                     Ppl.OTS_Mes_ID = row[11]
                     self.fullMeasurementList.append(Ppl)
 
+        print(self.fullMeasurementList)
         if len(self.fullMeasurementList) > 0:
             self.bi_divide()
 
@@ -310,51 +313,92 @@ class MeasurementsWidget(QWidget):
         return wname, rows[0]
 
 
-def search_and_interpolate(searching_array, x, interpolate=True):
-    if searching_array.iloc[-1, 0] < searching_array.iloc[0, 0]:
-        searching_array = searching_array.iloc[::-1]
-        searching_array.reset_index(inplace=True, drop=True)
-
-    column1 = searching_array.iloc[:, 0]
-    column2 = searching_array.iloc[:, 1]
-
-    length = column1.size
-    if (length != column2.size) or length == 0: return
-    if length == 1: return column2.iloc[0]
-
-    if x < column1.iloc[0]: return column2.iloc[0]
-    if x > column1.iloc[-1]: return column2.iloc[-1]
-    left = bisect.bisect_left(column1.to_list(), x)
-    right = bisect.bisect_right(column1.to_list(), x)
-    if left != right:
-        return column2.iloc[left]
-    else:
-        if interpolate:
-            percent = (x - column1.iloc[left - 1]) / (column1.iloc[right] - column1.iloc[left - 1])
-            return column2.iloc[left - 1] + abs((column2.iloc[right] - column2.iloc[left - 1]) * percent)
-        else:
-            return column2.iloc[left]
 
 
 def insert_data_to_sosresearch_table(Ppl):
+    if Ppl.table_models is None:return
     resid = Ppl.resid
-    rescreateddatetime = datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')
+    RESCREATEDATETIME = datetime.datetime.now()#.strftime('%d.%m.%Y %H:%M:%S')
     resmoduletypeid = 'none'
     resinterpretatorid = 'U5kpGq6aT42GXQopVH7PTA'
-    ressuborganization = Ppl.TP_id
-    resgeoligistorganizationid = Ppl.tzeh_id
-    resreserachtypeid = 281
+    RESSUBORGANIZATIONID = Ppl.TP_id
+    RESGEOLOGISTORGANIZATIONID = Ppl.tzeh_id
+    resresearchtypeid = 281
     resfieldid = Ppl.OTS_Field_ID
+    reswellid = Ppl.OTS_Well_ID
     rescreatorid = 'U5kpGq6aT42GXQopVH7PTA'
-    resfirstmeasarementstamp = Ppl.first_measure_datetime
+    resfirstmeasurementstamp = Ppl.first_measure_datetime.to_pydatetime()
     resgoal = 'Рпласт'
     resstatusid = 20
-    reslastmeasarementstamp = Ppl.last_measure_datetime
+    reslastmeasurementstamp = Ppl.last_measure_datetime.to_pydatetime()
     resinbrief = 1  # ???
-    print(Ppl.well_name, resid, rescreateddatetime, resmoduletypeid, resinterpretatorid, ressuborganization,
-          resgeoligistorganizationid, resreserachtypeid, resfieldid, rescreatorid, resfirstmeasarementstamp,
-          resgoal, resstatusid, reslastmeasarementstamp, resinbrief)
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        Sql_Q = ''' INSERT INTO ots_bn.sosresearch
+                    (ots_bn.sosresearch.resid,
+                    ots_bn.sosresearch.RESCREATEDATETIME,
+                    ots_bn.sosresearch.resmoduletypeid,
+                    ots_bn.sosresearch.resinterpretatorid,
+                    ots_bn.sosresearch.RESSUBORGANIZATIONID,
+                    ots_bn.sosresearch.RESGEOLOGISTORGANIZATIONID,
+                    ots_bn.sosresearch.resresearchtypeid,
+                    ots_bn.sosresearch.resfieldid,
+                    ots_bn.sosresearch.reswellid,
+                    ots_bn.sosresearch.rescreatorid,
+                    ots_bn.sosresearch.resfirstmeasurementstamp,
+                    ots_bn.sosresearch.resgoal,
+                    ots_bn.sosresearch.resstatusid,
+                    ots_bn.sosresearch.reslastmeasurementstamp,
+                    ots_bn.sosresearch.resinbrief) VALUES
+                    (:resid,
+                    :RESCREATEDATETIME,
+                    :resmoduletypeid,
+                    :resinterpretatorid,
+                    :RESSUBORGANIZATIONID,
+                    :RESGEOLOGISTORGANIZATIONID,
+                    :resreserachtypeid,
+                    :resfieldid,
+                    :reswellid,
+                    :rescreatorid,
+                    :resfirstmeasarementstamp,
+                    :resgoal,
+                    :resstatusid,
+                    :reslastmeasarementstamp,
+                    :resinbrief)'''
 
+
+        print(resid,
+        RESCREATEDATETIME,
+        resmoduletypeid,
+        resinterpretatorid,
+        RESSUBORGANIZATIONID,
+        RESGEOLOGISTORGANIZATIONID,
+        resresearchtypeid,
+        resfieldid,
+        reswellid,
+        rescreatorid,
+        resfirstmeasurementstamp,
+        resgoal,
+        resstatusid,
+        reslastmeasurementstamp,
+        resinbrief)
+        cursor.execute(Sql_Q,
+                    resid=resid,
+                    RESCREATEDATETIME=RESCREATEDATETIME,
+                    resmoduletypeid=resmoduletypeid,
+                    resinterpretatorid=resinterpretatorid,
+                    RESSUBORGANIZATIONID=RESSUBORGANIZATIONID,
+                    RESGEOLOGISTORGANIZATIONID=RESGEOLOGISTORGANIZATIONID,
+                    resreserachtypeid=resresearchtypeid,
+                    resfieldid=resfieldid,
+                    reswellid=reswellid,
+                    rescreatorid=rescreatorid,
+                    resfirstmeasarementstamp=resfirstmeasurementstamp,
+                    resgoal=resgoal,
+                    resstatusid=resstatusid,
+                    reslastmeasarementstamp=reslastmeasurementstamp,
+                    resinbrief=resinbrief)
+        connection.commit()
 
 def insert_data_to_sosresearchresult_table(Ppl):
     rsrrresearchid = Ppl.resid
@@ -366,14 +410,10 @@ def insert_data_to_sosresearchresult_table(Ppl):
     rsrinflowtechhaltime = 180  # ????????????????
     rsrextractzaboyleveltypeid = 1  # ?????????
 
-    print(Ppl.well_name, rsrrresearchid, rsrcriticalvolumegascontent, rsrreckonspeedloss,
-          rsrpiperoughness, rsrdensityliquid, rsrresulmeasurementid, rsrinflowtechhaltime, rsrextractzaboyleveltypeid)
 
 
 def insert_data_to_sosresearchmeasurement_table(Ppl):
-
     double_measure_in_sosmeasurement(Ppl)
-        # TODO Create remaining data for DB Fields
     rsrresearchid = Ppl.resid
     rmsmeasurementid = Ppl.OTS_New_Mes_ID
     if Ppl.table_ind == 0:
@@ -383,10 +423,23 @@ def insert_data_to_sosresearchmeasurement_table(Ppl):
         rmsaslgorithmtype = 2
         rmsascentdensityliquid = Ppl.ro
     rmsavgtgradient = Ppl.avg_temp_gradient
+    rmsgasoilboundary = Ppl.GOB
+    rmswateroilboundary = Ppl.OWB
+    rmsgaswaterboundary = Ppl.GWB
+    rmsstaticlevel = Ppl.static_level
+    if rmsgasoilboundary is not None:
+        rmsverticalgasoilboundary = search_and_interpolate(Ppl.incl, rmsgasoilboundary)
+    if rmswateroilboundary is not None:
+        rmsverticalwateroilboundary = search_and_interpolate(Ppl.incl, rmswateroilboundary)
+    if rmsgaswaterboundary is not None:
+        rmsverticalgaswaterboundary = search_and_interpolate(Ppl.incl, rmsgaswaterboundary)
+    if Ppl.table_ind == 0:
+        rmsascentshelfs = make_shelfs_blob(Ppl)
+        rmsdescentshelfs = None
+    else:
+        rmsascentshelfs = None
+        rmsdescentshelfs = make_shelfs_blob(Ppl)
 
-
-
-    print(Ppl.well_name, )
 
 
 def double_measure_in_sosmeasurement(Ppl):
@@ -396,7 +449,6 @@ def double_measure_in_sosmeasurement(Ppl):
                     WHERE ots_bn.sosmeasurement.mesid = :mesid''',
                        mesid=Ppl.OTS_Mes_ID)
         row = list(cursor.fetchone())
-        temprow = list(row)
         original_id = row[0]
         row[0] = make_id()
         Ppl.OTS_New_Mes_ID = row[0]
@@ -406,10 +458,74 @@ def double_measure_in_sosmeasurement(Ppl):
         row[17] = None
         row[18] = None
         row[22] = None
-        for i,j in zip(row,temprow):
-            if i != j : print(i, " - ", j, end='   |||||   ')
-        print('\n')
-        print(row)
+
+
+
+def make_shelfs_blob(Ppl):
+    if Ppl.final_data is None or Ppl.table_models is None:
+        print('no data')
+        return
+    model = Ppl.table_models[Ppl.table_ind]
+
+    blob = b'\x01'
+    for i in range(model.rowCount()):
+        float_series = pd.Series(dtype='f')
+        depth = float(model.item(i, 0).text())
+        elongation = float(model.item(i, 1).text())
+        vert_depth = depth - elongation
+        pressure = float(model.item(i, 2).text())
+        temperature = float(model.item(i, 3).text())
+        try:
+            if model.item(i, 6).checkState() == 2:
+                blob += (b'\x01' + b'\x01')
+            else:
+                blob += (b'\x00' + b'\x01')
+            ro = float(model.item(i, 4).text())
+            interval = float(model.item(i, 0).text()) - float(model.item(i-1, 0).text())
+            delta_pres = pressure - float(model.item(i-1, 2).text())
+            delta_vert_depth = vert_depth - (float(model.item(i - 1, 0).text()) - float(model.item(i - 1, 1).text()))
+            temp_grad = (temperature - float(model.item(i - 1, 3).text()))/delta_vert_depth
+
+        except: # первая строка
+            ro = 0.
+            delta_vert_depth = 0.
+            interval = 0.
+            delta_pres = 0.
+            temp_grad = 0.
+            blob += (b'\x00' + b'\x00')
+        if Ppl.table_ind == 0:
+            datetime = search_and_interpolate(Ppl.final_data.iloc[:int(Ppl.divider_points[1]), [4, 3]], depth)
+            blob += pd.Series((datetime - pd.Timestamp('1899-12-30')).total_seconds()/86400).to_numpy().tobytes()
+        else:
+            datetime = search_and_interpolate(Ppl.final_data.iloc[int(Ppl.divider_points[1]):, [4, 3]], depth)
+            blob += pd.Series((datetime - pd.Timestamp('1899-12-30')).total_seconds()/86400).to_numpy().tobytes()
+        temp_series = pd.Series([depth, vert_depth, pressure, temperature, interval, elongation, delta_pres,
+                                       delta_vert_depth, ro, temp_grad, pressure, delta_pres, ro], dtype='f')
+        float_series=float_series.append(temp_series, ignore_index=True)
+        blob += float_series.to_numpy().tobytes()
+    return blob
+    #print(Ppl.well_name, len(blob), blob)
+    #blob_what_is_what(blob)
+
+def insert_data_to_sosresearchgraph_table(Ppl):
+    rgrid = make_id()
+    rgrresearchid = Ppl.resid
+    rgrgraphtypeid = 64
+    rgrcoordtypeid = 32
+    rgrorder = '1'
+    rgrfilename = 'khOCt7N/xkmfK+XrNUl3hw'
+    plot = PlotWidget()
+    fig = plot.plot(Ppl.final_data, save=True)
+    rgrpicture = fig.getvalue()
+
+def insert_data_to_sosresearchmarkermeasurement_table(Ppl):
+
+    rmmresearchid = Ppl.resid
+    rmmmeasurementid = Ppl.OTS_New_Mes_ID
+    rmmtypeid = 5
+    rmmdate = datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')
+    rmmp = Ppl.final_data.iloc[:, 1].max()
+    rmmt = Ppl.final_data.iloc[:, 2].max()
 
 
 def make_id():
@@ -512,3 +628,56 @@ def to_300_points(sample):
         return final_300(sample)
     else:
         return final_300(sample)
+
+
+def blob_what_is_what(bytes_in):
+
+        a = bytes_in[1:]
+
+        num_shelfs = int((len(a))/62)
+        lists=[list() for i in range(16)]
+        for shelf in range(num_shelfs):
+            lists[0].append(a[shelf*62]) #bool расчет ср.пл.
+            lists[1].append(a[1+shelf * 62]) #bool расчет ср.темп.
+            lists[2].append(np.frombuffer(a[ 2 + shelf * 62:10 + shelf * 62]).data[0]) # datetime
+            lists[3].append(np.frombuffer(a[10 + shelf * 62:14 + shelf * 62], dtype=np.dtype('f')).data[0]) # глубина(м)
+            lists[4].append(np.frombuffer(a[14 + shelf * 62:18 + shelf * 62], dtype=np.dtype('f')).data[0]) # глубина с учетом удлинения
+            lists[5].append(np.frombuffer(a[18 + shelf * 62:22 + shelf * 62], dtype=np.dtype('f')).data[0])  # давление
+            lists[6].append(np.frombuffer(a[22 + shelf * 62:26 + shelf * 62], dtype=np.dtype('f')).data[0])  # температура
+            lists[7].append(np.frombuffer(a[26 + shelf * 62:30 + shelf * 62], dtype=np.dtype('f')).data[0])  # интервал
+            lists[8].append(np.frombuffer(a[30 + shelf * 62:34 + shelf * 62], dtype=np.dtype('f')).data[0])  # удлинение
+            lists[9].append(np.frombuffer(a[34 + shelf * 62:38 + shelf * 62], dtype=np.dtype('f')).data[0])  # разность давлений между полками
+            lists[10].append(np.frombuffer(a[38 + shelf * 62:42 + shelf * 62], dtype=np.dtype('f')).data[0])  # разность глубин с учетом удлинения
+            lists[11].append(np.frombuffer(a[42 + shelf * 62:46 + shelf * 62], dtype=np.dtype('f')).data[0])  # расчетная плотность
+            lists[12].append(np.frombuffer(a[46 + shelf * 62:50 + shelf * 62], dtype=np.dtype('f')).data[0])  # градиент температуры
+            lists[13].append(np.frombuffer(a[50 + shelf * 62:54 + shelf * 62], dtype=np.dtype('f')).data[0])  # давление 2
+            lists[14].append(np.frombuffer(a[54 + shelf * 62:58 + shelf * 62], dtype=np.dtype('f')).data[0])  # разность давлений 2
+            lists[15].append(np.frombuffer(a[58 + shelf * 62:62 + shelf * 62], dtype=np.dtype('f')).data[0])  # расчетная плотность 2
+
+        for l in lists:
+            print(l, end ='\n\n')
+
+def search_and_interpolate(searching_array, x, interpolate=True):
+    if searching_array.iloc[-1, 0] < searching_array.iloc[0, 0]:
+        searching_array = searching_array.iloc[::-1]
+        searching_array.reset_index(inplace=True, drop=True)
+
+    column1 = searching_array.iloc[:, 0]
+    column2 = searching_array.iloc[:, 1]
+
+    length = column1.size
+    if (length != column2.size) or length == 0: return
+    if length == 1: return column2.iloc[0]
+
+    if x < column1.iloc[0]: return column2.iloc[0]
+    if x > column1.iloc[-1]: return column2.iloc[-1]
+    left = bisect.bisect_left(column1.to_list(), x)
+    right = bisect.bisect_right(column1.to_list(), x)
+    if left != right:
+        return column2.iloc[left]
+    else:
+        if interpolate:
+            percent = (x - column1.iloc[left - 1]) / (column1.iloc[right] - column1.iloc[left - 1])
+            return column2.iloc[left - 1] + abs((column2.iloc[right] - column2.iloc[left - 1]) * percent)
+        else:
+            return column2.iloc[left]
