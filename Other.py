@@ -251,9 +251,9 @@ class MeasurementsWidget(QWidget):
                     Ppl = Interpretation.Ppl_fabric(field_name, well_name, data)
                     Ppl.OTS_Well_ID = row[0]
                     Ppl.OTS_Mes_ID = row[11]
+
                     self.fullMeasurementList.append(Ppl)
 
-        print(self.fullMeasurementList)
         if len(self.fullMeasurementList) > 0:
             self.bi_divide()
 
@@ -313,8 +313,6 @@ class MeasurementsWidget(QWidget):
         return wname, rows[0]
 
 
-
-
 def insert_data_to_sosresearch_table(Ppl):
     if Ppl.table_models is None:return
     resid = Ppl.resid
@@ -328,9 +326,11 @@ def insert_data_to_sosresearch_table(Ppl):
     reswellid = Ppl.OTS_Well_ID
     rescreatorid = 'U5kpGq6aT42GXQopVH7PTA'
     resfirstmeasurementstamp = Ppl.first_measure_datetime.to_pydatetime()
+    print(resfirstmeasurementstamp)
     resgoal = 'Рпласт'
     resstatusid = 20
     reslastmeasurementstamp = Ppl.last_measure_datetime.to_pydatetime()
+    print(reslastmeasurementstamp)
     resinbrief = 1  # ???
     with sql_query() as connection:
         cursor = connection.cursor()
@@ -401,38 +401,83 @@ def insert_data_to_sosresearch_table(Ppl):
         connection.commit()
 
 def insert_data_to_sosresearchresult_table(Ppl):
-    rsrrresearchid = Ppl.resid
+    if Ppl.ro is None:
+        print('no ppl.ro')
+        return
+    RSRRESEARCHID = Ppl.resid
     rsrcriticalvolumegascontent = 20
     rsrreckonspeedloss = 0
     rsrpiperoughness = 0.0254
     rsrdensityliquid = Ppl.ro
-    rsrresulmeasurementid = Ppl.OTS_Mes_ID
-    rsrinflowtechhaltime = 180  # ????????????????
+    RSRRESULTMEASUREMENTID = Ppl.OTS_Mes_ID
+    RSRINFLOWTECHHALTTIME = 180  # ????????????????
     rsrextractzaboyleveltypeid = 1  # ?????????
 
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        Sql_Q = ''' INSERT INTO ots_bn.sosresearchresult
+                    (RSRRESEARCHID,
+                     rsrcriticalvolumegascontent,
+                     rsrreckonspeedloss,
+                     rsrpiperoughness,
+                     rsrdensityliquid,
+                     RSRRESULTMEASUREMENTID,
+                     RSRINFLOWTECHHALTTIME,
+                     rsrextractzaboyleveltypeid) VALUES
+                    (:RSRRESEARCHID,
+                     :rsrcriticalvolumegascontent,
+                     :rsrreckonspeedloss,
+                     :rsrpiperoughness,
+                     :rsrdensityliquid,
+                     :RSRRESULTMEASUREMENTID,
+                     :RSRINFLOWTECHHALTTIME,
+                     :rsrextractzaboyleveltypeid
+                    )'''
 
+        cursor.execute(Sql_Q,
+                       RSRRESEARCHID = RSRRESEARCHID,
+                       rsrcriticalvolumegascontent = rsrcriticalvolumegascontent,
+                       rsrreckonspeedloss = rsrreckonspeedloss,
+                       rsrpiperoughness = rsrpiperoughness,
+                       rsrdensityliquid = rsrdensityliquid,
+                       RSRRESULTMEASUREMENTID = RSRRESULTMEASUREMENTID,
+                       RSRINFLOWTECHHALTTIME =  RSRINFLOWTECHHALTTIME,
+                       rsrextractzaboyleveltypeid =  rsrextractzaboyleveltypeid
+                       )
+        connection.commit()
 
 def insert_data_to_sosresearchmeasurement_table(Ppl):
+    if Ppl.table_models is None:
+        print('error Ppl')
+        return
     double_measure_in_sosmeasurement(Ppl)
-    rsrresearchid = Ppl.resid
+    RMSRESEARCHID = Ppl.resid
     rmsmeasurementid = Ppl.OTS_New_Mes_ID
     if Ppl.table_ind == 0:
-        rmsaslgorithmtype = 1
+        RMSALGORITHMTYPE = 1
         rmsdescentdensityliquid = Ppl.ro
+        rmsascentdensityliquid = None
     else:
-        rmsaslgorithmtype = 2
+        RMSALGORITHMTYPE = 2
         rmsascentdensityliquid = Ppl.ro
+        rmsdescentdensityliquid = None
     rmsavgtgradient = Ppl.avg_temp_gradient
     rmsgasoilboundary = Ppl.GOB
     rmswateroilboundary = Ppl.OWB
     rmsgaswaterboundary = Ppl.GWB
     rmsstaticlevel = Ppl.static_level
     if rmsgasoilboundary is not None:
-        rmsverticalgasoilboundary = search_and_interpolate(Ppl.incl, rmsgasoilboundary)
+        rmsverticalgasoilboundary = rmsgasoilboundary- search_and_interpolate(Ppl.incl, rmsgasoilboundary)
+    else:
+        rmsverticalgasoilboundary = None
     if rmswateroilboundary is not None:
-        rmsverticalwateroilboundary = search_and_interpolate(Ppl.incl, rmswateroilboundary)
+        rmsverticalwateroilboundary = rmswateroilboundary-search_and_interpolate(Ppl.incl, rmswateroilboundary)
+    else:
+        rmsverticalwateroilboundary = None
     if rmsgaswaterboundary is not None:
-        rmsverticalgaswaterboundary = search_and_interpolate(Ppl.incl, rmsgaswaterboundary)
+        rmsverticalgaswaterboundary = rmsgaswaterboundary-search_and_interpolate(Ppl.incl, rmsgaswaterboundary)
+    else:
+        rmsverticalgaswaterboundary = None
     if Ppl.table_ind == 0:
         rmsascentshelfs = make_shelfs_blob(Ppl)
         rmsdescentshelfs = None
@@ -440,14 +485,65 @@ def insert_data_to_sosresearchmeasurement_table(Ppl):
         rmsascentshelfs = None
         rmsdescentshelfs = make_shelfs_blob(Ppl)
 
-
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        Sql_Q = ''' INSERT INTO ots_bn.sosresearchmeasurement
+                    (RMSRESEARCHID,
+                    rmsmeasurementid,
+                    RMSALGORITHMTYPE,
+                    rmsdescentdensityliquid,
+                    rmsascentdensityliquid,
+                    rmsavgtgradient,
+                    rmsgasoilboundary,
+                    rmswateroilboundary,
+                    rmsgaswaterboundary,
+                    rmsstaticlevel,
+                    rmsverticalgasoilboundary,
+                    rmsverticalwateroilboundary,
+                    rmsverticalgaswaterboundary,
+                    rmsascentshelfs,
+                    rmsdescentshelfs) VALUES
+                    (:RMSRESEARCHID,
+                    :rmsmeasurementid,
+                    :RMSALGORITHMTYPE,
+                    :rmsdescentdensityliquid,
+                    :rmsascentdensityliquid,
+                    :rmsavgtgradient,
+                    :rmsgasoilboundary,
+                    :rmswateroilboundary,
+                    :rmsgaswaterboundary,
+                    :rmsstaticlevel,
+                    :rmsverticalgasoilboundary,
+                    :rmsverticalwateroilboundary,
+                    :rmsverticalgaswaterboundary,
+                    :rmsascentshelfs,
+                    :rmsdescentshelfs
+                    )'''
+        cursor.execute(Sql_Q,
+                        RMSRESEARCHID =RMSRESEARCHID,
+                        rmsmeasurementid =rmsmeasurementid,
+                        RMSALGORITHMTYPE =RMSALGORITHMTYPE,
+                        rmsdescentdensityliquid=rmsdescentdensityliquid,
+                        rmsascentdensityliquid=rmsascentdensityliquid,
+                        rmsavgtgradient=rmsavgtgradient,
+                        rmsgasoilboundary=rmsgasoilboundary,
+                        rmswateroilboundary=rmswateroilboundary,
+                        rmsgaswaterboundary=rmsgaswaterboundary,
+                        rmsstaticlevel=rmsstaticlevel,
+                        rmsverticalgasoilboundary=rmsverticalgasoilboundary,
+                        rmsverticalwateroilboundary=rmsverticalwateroilboundary,
+                        rmsverticalgaswaterboundary=rmsverticalgaswaterboundary,
+                        rmsascentshelfs=rmsascentshelfs,
+                        rmsdescentshelfs=rmsdescentshelfs)
+        connection.commit()
 
 def double_measure_in_sosmeasurement(Ppl):
     with sql_query() as connection:
         cursor = connection.cursor()
+        mesid = Ppl.OTS_Mes_ID
         cursor.execute(''' SELECT * from ots_bn.sosmeasurement
                     WHERE ots_bn.sosmeasurement.mesid = :mesid''',
-                       mesid=Ppl.OTS_Mes_ID)
+                       mesid=mesid)
         row = list(cursor.fetchone())
         original_id = row[0]
         row[0] = make_id()
@@ -458,8 +554,11 @@ def double_measure_in_sosmeasurement(Ppl):
         row[17] = None
         row[18] = None
         row[22] = None
-
-
+        row[-1] = '/fk5oAxKyUm2NL+7ZjkYTg'
+        Sql_Q = ''' INSERT INTO ots_bn.sosmeasurement VALUES 
+        (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12,:13,:14,:15,:16,:17,:18,:19,:20,:21,:22,:23,:24,:25)'''
+        cursor.execute(Sql_Q, row)
+        connection.commit()
 
 def make_shelfs_blob(Ppl):
     if Ppl.final_data is None or Ppl.table_models is None:
@@ -517,15 +616,156 @@ def insert_data_to_sosresearchgraph_table(Ppl):
     plot = PlotWidget()
     fig = plot.plot(Ppl.final_data, save=True)
     rgrpicture = fig.getvalue()
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        Sql_Q = ''' INSERT INTO ots_bn.sosresearchgraph
+                    (rgrid,
+                     rgrresearchid,
+                     rgrgraphtypeid,
+                     rgrcoordtypeid,
+                     rgrorder,
+                     rgrfilename,
+                     rgrpicture) VALUES
+                    (:rgrid,
+                     :rgrresearchid,
+                     :rgrgraphtypeid,
+                     :rgrcoordtypeid,
+                     :rgrorder,
+                     :rgrfilename,
+                     :rgrpicture)'''
+        cursor.execute(Sql_Q,
+                        rgrid=rgrid,
+                        rgrresearchid=rgrresearchid,
+                        rgrgraphtypeid=rgrgraphtypeid,
+                        rgrcoordtypeid=rgrcoordtypeid,
+                        rgrorder=rgrorder,
+                        rgrfilename=rgrfilename,
+                        rgrpicture=rgrpicture)
+        connection.commit()
 
 def insert_data_to_sosresearchmarkermeasurement_table(Ppl):
 
     rmmresearchid = Ppl.resid
     rmmmeasurementid = Ppl.OTS_New_Mes_ID
     rmmtypeid = 5
-    rmmdate = datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')
-    rmmp = Ppl.final_data.iloc[:, 1].max()
-    rmmt = Ppl.final_data.iloc[:, 2].max()
+    rmmdate = datetime.datetime.now()
+    rmmp = float(Ppl.final_data.iloc[:, 1].max())
+    rmmt = float(Ppl.final_data.iloc[:, 2].max())
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        Sql_Q = ''' INSERT INTO ots_bn.sosresearchmarkermeasurement
+                    (rmmresearchid,
+                     rmmmeasurementid,
+                     rmmtypeid,
+                     rmmdate,
+                     rmmp,
+                     rmmt) VALUES
+                    (:rmmresearchid,
+                     :rmmmeasurementid,
+                     :rmmtypeid,
+                     :rmmdate,
+                     :rmmp,
+                     :rmmt)'''
+        cursor.execute(Sql_Q,
+                       rmmresearchid=rmmresearchid,
+                       rmmmeasurementid= rmmmeasurementid,
+                       rmmtypeid=rmmtypeid,
+                       rmmdate=rmmdate,
+                       rmmp=rmmp,
+                       rmmt=rmmt)
+        connection.commit()
+
+def insert_data_to_sosresearchwell_table(Ppl):
+    inds = [None, 12, 11, 69, 66, 72, 75, 73, 76, 60, 77, 78, 79, 57,
+            80, 81, 82, 83, None, None, None, 58, 59, 61, None, 15, 5,
+            74, 0, None, 84, 56, None, 62, 63, 16, 21, 70, 71, 67, 68,
+            85, 86, 6, 7, 8, 9, 10, 26, 36, 27, 39, 28, 37, 38, 29, 40,
+            41, 32, 33, 42, 30, 35, 43, 34, None, None, None, 25, None,
+            31, 46, 47, 48, 64, 65, 87, None, 112, 113, 88, 89, 90, 91,
+            92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105,
+            106, 107, 22, 23, 108, 109, None, None, 54, 55, 53, 98, None,
+            None, None, None, 111, 116, 117, None, 119, 120, 121]
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        Sql_Q = '''SELECT * FROM ots_bn.soswell
+        WHERE ots_bn.soswell.welid = :welid'''
+        cursor.execute(Sql_Q, welid = Ppl.OTS_Well_ID)
+        row = cursor.fetchone()
+        new_row = row_permutation(row, inds)
+        new_row[0] = make_id()
+        Ppl.OTS_research_well_ID = new_row[0]
+        new_row[24] = 52
+        new_row[29] = Ppl.resid
+        Sql_Q = '''INSERT INTO ots_bn.sosresearchwell
+        VALUES ('''
+        for i in range(121):
+            Sql_Q += ':' + str(i+1) + ','
+        Sql_Q = Sql_Q.replace(':121,', ':121)')
+        cursor.execute(Sql_Q, new_row)
+        connection.commit()
+
+
+def insert_data_to_sosresearchvalidation_table(Ppl):
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        row=[]
+        row.extend([Ppl.resid, datetime.datetime.now(), None, 'Интерпретатор 9000', 20])
+        cursor.execute('''INSERT INTO ots_bn.sosresearchvalidation
+        VALUES (:1,:2,:3,:4,:5)''', row)
+        connection.commit()
+
+def insert_data_to_sosresearchlayerinput_table(Ppl):
+    inds = [None, 2, 6, 8, 7, 4, 5, 9, 10, 11, 3,
+            None, None, None, None, None, 17, 18,
+            19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        Sql_Q = '''SELECT * FROM ots_bn.sosbed
+        WHERE ots_bn.sosbed.bedid = :bedid'''
+        for layer_id in Ppl.layers_ids:
+            cursor.execute(Sql_Q, bedid=layer_id)
+            row = cursor.fetchone()
+            new_row = row_permutation(row, inds)
+            new_row[0] = make_id()
+            Ppl.OTS_research_layer_input_ids.append(new_row[0])
+            new_row[11] = 1
+            new_row[13] = Ppl.OTS_research_well_ID
+            new_row[14] = layer_id
+            cursor.execute('''INSERT INTO ots_bn.sosresearchlayerinput
+            VALUES (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12,:13,:14,:15,:16,:17,:18,
+            :19,:20,:21,:22,:23,:24,:25,:26,:27,:28,:29)''', new_row)
+            connection.commit()
+
+def insert_data_to_sosresearchperforation_table(Ppl):
+
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        for research_layer_id, bedid in zip(Ppl.OTS_research_layer_input_ids, Ppl.layers_ids):
+            print("!!!!!!")
+            print(bedid, Ppl.OTS_Well_ID)
+            Sql_Q = '''SELECT * FROM ots_bn.sosperforation
+                    WHERE (ots_bn.sosperforation.prfbedid = :bedid) AND
+                    (ots_bn.sosperforation.prfwellid = :wellid)'''
+            cursor.execute(Sql_Q, bedid=bedid, wellid=Ppl.OTS_Well_ID)
+            rows = cursor.fetchall()
+            print(rows)
+            for row in rows:
+                print("@@@@@")
+                print(row)
+                new_row = [row[1], row[2], row[6], research_layer_id, row[5]]
+                print(new_row)
+                Sql_Q = '''INSERT INTO ots_bn.sosresearchperforation
+                VALUES (:1,:2,:3,:4,:5)'''
+                cursor.execute(Sql_Q, new_row)
+                connection.commit()
+
+def row_permutation(row, indexes):
+    def permutator(List, i):
+        try:
+            return List[i]
+        except:
+            return i
+    return [permutator(row, i) for i in indexes]
 
 
 def make_id():

@@ -110,6 +110,9 @@ class Ppl:
         self.max_depth = None
         self.depth_pressure_temperature_data=None
         self.divider_points = None
+        self.layers_ids = None
+        self.OTS_research_well_ID = None
+        self.OTS_research_layer_input_ids = []
         if not new:
             self.get_well_params_old()
 
@@ -193,6 +196,7 @@ class Ppl:
             rows = cursor.fetchall()
             rows.sort()
             self.vdp = rows[0][0]
+            self.layers_ids = [i[1] for i in rows]
             layer = [sql_bed(i[1]) for i in rows]
             self.layer = set(layer)
             cursor.execute('''SELECT ots_bn.soswell.WELANGULARITYTESTDEPTH,
@@ -224,6 +228,8 @@ class Ppl:
             self.research_date = str(temp_pressure_time_series[len(temp_pressure_time_series) // 2])[:10]
             self.first_measure_datetime = temp_pressure_time_series.iloc[0]
             self.last_measure_datetime = temp_pressure_time_series.iloc[-1]
+            print(self.first_measure_datetime)
+            print(self.last_measure_datetime)
 
             # cursor.execute('''SELECT ots_bn.sosorganizationrelation.orrparentid
             #                 from ots_bn.sosorganizationrelation

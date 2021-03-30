@@ -219,13 +219,8 @@ class MainWindow(QMainWindow):
         if e.key() == QtCore.Qt.Key_F10:
             print("ТЫЩЩ")
             for res in [self.ResearchsList[0]]:
-                # res.final_data.to_clipboard()
-                insert_data_to_sosresearch_table(res)
-                # insert_data_to_sosresearchresult_table(res)
-                # insert_data_to_sosresearchmeasurement_table(res)
-                # make_shelfs_blob(res)
-                # insert_data_to_sosresearchgraph_table(res)
-                # insert_data_to_sosresearchmarkermeasurement_table(res)
+                print(res.resid)
+                self.insert_research_data_to_DB(res)
         if e.key() == QtCore.Qt.Key_F9:
             print("TEST")
             for res in self.ResearchsList:
@@ -234,8 +229,16 @@ class MainWindow(QMainWindow):
                 print(type(res.final_data.iloc[0, 0]))
 
 
-
-
+    def insert_research_data_to_DB(self, res):
+        insert_data_to_sosresearch_table(res)
+        insert_data_to_sosresearchresult_table(res)
+        insert_data_to_sosresearchmeasurement_table(res)
+        insert_data_to_sosresearchgraph_table(res)
+        insert_data_to_sosresearchmarkermeasurement_table(res)
+        insert_data_to_sosresearchwell_table(res)
+        insert_data_to_sosresearchvalidation_table(res)
+        insert_data_to_sosresearchlayerinput_table(res)
+        insert_data_to_sosresearchperforation_table(res)
 
 
     def stop_gif(self, dwd, st, td, cd=None):
