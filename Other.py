@@ -13,7 +13,7 @@ import bisect
 import uuid, base64
 import datetime
 from Plot import PlotWidget
-
+from math import ceil, floor
 
 class MeasurementsWidget(QWidget):
 
@@ -94,8 +94,38 @@ class MeasurementsWidget(QWidget):
         for ppl in self.Ppllist: ppl.get_well_params()
         print(self.chosenmeasurelistview.model())
         print(self.Ppllist)
-        self.parent.receive_list(self.chosenmeasurelistview.model(), self.Ppllist)
+        model_to_return = self.make_model_to_return_to_main()
+        self.parent.receive_list(model_to_return, self.Ppllist)
         self.close()
+
+    def make_model_to_return_to_main(self):
+        model = self.chosenmeasurelistview.model()
+        new_model = QtGui.QStandardItemModel(len(self.Ppllist), 3)
+        new_model.setHorizontalHeaderLabels(['Площадь', 'Скважина', 'Интервал'])
+
+        for i in range(model.rowCount()):
+            square, well_num = model.item(i,0).text().split(" ")
+            last_num = int(str(int(self.Ppllist[i].max_depth/50))[-1])
+            if self.Ppllist[i].max_depth <=1000:
+                interval = 50
+            elif last_num >=5:
+                interval = ceil(self.Ppllist[i].max_depth / 500) * 50
+            else:
+                interval = floor(self.Ppllist[i].max_depth / 500) * 50
+            item = QStandardItem(square)
+            item.setTextAlignment(QtCore.Qt.AlignCenter)
+            item.setEditable(False)
+            new_model.setItem(i, 0, QStandardItem(item))
+            item.setText(well_num)
+            item.setEditable(False)
+            new_model.setItem(i, 1, QStandardItem(item))
+            item.setText(str(interval))
+            item.setEditable(True)
+
+            new_model.setItem(i, 2, QStandardItem(item))
+
+
+        return new_model
 
     def draw_graph(self, list_id):
         if not list_id:
@@ -326,11 +356,9 @@ def insert_data_to_sosresearch_table(Ppl):
     reswellid = Ppl.OTS_Well_ID
     rescreatorid = 'U5kpGq6aT42GXQopVH7PTA'
     resfirstmeasurementstamp = Ppl.first_measure_datetime.to_pydatetime()
-    print(resfirstmeasurementstamp)
     resgoal = 'Рпласт'
     resstatusid = 20
     reslastmeasurementstamp = Ppl.last_measure_datetime.to_pydatetime()
-    print(reslastmeasurementstamp)
     resinbrief = 1  # ???
     with sql_query() as connection:
         cursor = connection.cursor()
@@ -367,21 +395,21 @@ def insert_data_to_sosresearch_table(Ppl):
                     :resinbrief)'''
 
 
-        print(resid,
-        RESCREATEDATETIME,
-        resmoduletypeid,
-        resinterpretatorid,
-        RESSUBORGANIZATIONID,
-        RESGEOLOGISTORGANIZATIONID,
-        resresearchtypeid,
-        resfieldid,
-        reswellid,
-        rescreatorid,
-        resfirstmeasurementstamp,
-        resgoal,
-        resstatusid,
-        reslastmeasurementstamp,
-        resinbrief)
+        # print(resid,
+        # RESCREATEDATETIME,
+        # resmoduletypeid,
+        # resinterpretatorid,
+        # RESSUBORGANIZATIONID,
+        # RESGEOLOGISTORGANIZATIONID,
+        # resresearchtypeid,
+        # resfieldid,
+        # reswellid,
+        # rescreatorid,
+        # resfirstmeasurementstamp,
+        # resgoal,
+        # resstatusid,
+        # reslastmeasurementstamp,
+        # resinbrief)
         cursor.execute(Sql_Q,
                     resid=resid,
                     RESCREATEDATETIME=RESCREATEDATETIME,
@@ -409,7 +437,7 @@ def insert_data_to_sosresearchresult_table(Ppl):
     rsrreckonspeedloss = 0
     rsrpiperoughness = 0.0254
     rsrdensityliquid = Ppl.ro
-    RSRRESULTMEASUREMENTID = Ppl.OTS_Mes_ID
+    RSRRESULTMEASUREMENTID = Ppl.OTS_New_Mes_ID
     RSRINFLOWTECHHALTTIME = 180  # ????????????????
     rsrextractzaboyleveltypeid = 1  # ?????????
 
@@ -478,7 +506,11 @@ def insert_data_to_sosresearchmeasurement_table(Ppl):
         rmsverticalgaswaterboundary = rmsgaswaterboundary-search_and_interpolate(Ppl.incl, rmsgaswaterboundary)
     else:
         rmsverticalgaswaterboundary = None
-    if Ppl.table_ind == 0:
+    if rmsstaticlevel is not None:
+        rmsverticalstaticlevel = rmsstaticlevel-search_and_interpolate(Ppl.incl, rmsstaticlevel)
+    else:
+        rmsverticalstaticlevel = None
+    if Ppl.table_ind == 1:
         rmsascentshelfs = make_shelfs_blob(Ppl)
         rmsdescentshelfs = None
     else:
@@ -501,6 +533,7 @@ def insert_data_to_sosresearchmeasurement_table(Ppl):
                     rmsverticalgasoilboundary,
                     rmsverticalwateroilboundary,
                     rmsverticalgaswaterboundary,
+                    rmsverticalstaticlevel,
                     rmsascentshelfs,
                     rmsdescentshelfs) VALUES
                     (:RMSRESEARCHID,
@@ -516,6 +549,7 @@ def insert_data_to_sosresearchmeasurement_table(Ppl):
                     :rmsverticalgasoilboundary,
                     :rmsverticalwateroilboundary,
                     :rmsverticalgaswaterboundary,
+                    :rmsverticalstaticlevel,
                     :rmsascentshelfs,
                     :rmsdescentshelfs
                     )'''
@@ -533,11 +567,13 @@ def insert_data_to_sosresearchmeasurement_table(Ppl):
                         rmsverticalgasoilboundary=rmsverticalgasoilboundary,
                         rmsverticalwateroilboundary=rmsverticalwateroilboundary,
                         rmsverticalgaswaterboundary=rmsverticalgaswaterboundary,
+                        rmsverticalstaticlevel=rmsverticalstaticlevel,
                         rmsascentshelfs=rmsascentshelfs,
                         rmsdescentshelfs=rmsdescentshelfs)
         connection.commit()
 
 def double_measure_in_sosmeasurement(Ppl):
+
     with sql_query() as connection:
         cursor = connection.cursor()
         mesid = Ppl.OTS_Mes_ID
@@ -556,9 +592,25 @@ def double_measure_in_sosmeasurement(Ppl):
         row[22] = None
         row[-1] = '/fk5oAxKyUm2NL+7ZjkYTg'
         Sql_Q = ''' INSERT INTO ots_bn.sosmeasurement VALUES 
-        (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12,:13,:14,:15,:16,:17,:18,:19,:20,:21,:22,:23,:24,:25)'''
+        (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12,:13,:14,:15,
+        :16,:17,:18,:19,:20,:21,:22,:23,:24,:25)'''
         cursor.execute(Sql_Q, row)
         connection.commit()
+        double_measuremtmeter_in_sosmeasurementmtmeter(Ppl)
+
+def double_measuremtmeter_in_sosmeasurementmtmeter(Ppl):
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        cursor.execute(''' SELECT * from ots_bn.sosmeasurementmtmeter
+                    WHERE ots_bn.sosmeasurementmtmeter.mtmeasurementid = :mesid''',
+                       mesid=Ppl.OTS_Mes_ID)
+        row = list(cursor.fetchone())
+        row[0] = Ppl.OTS_New_Mes_ID
+        Sql_Q = ''' INSERT INTO ots_bn.sosmeasurementmtmeter VALUES 
+        (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12,:13,:14,:15, :16,:17,:18)'''
+        cursor.execute(Sql_Q, row)
+        connection.commit()
+
 
 def make_shelfs_blob(Ppl):
     if Ppl.final_data is None or Ppl.table_models is None:
@@ -583,7 +635,7 @@ def make_shelfs_blob(Ppl):
             interval = float(model.item(i, 0).text()) - float(model.item(i-1, 0).text())
             delta_pres = pressure - float(model.item(i-1, 2).text())
             delta_vert_depth = vert_depth - (float(model.item(i - 1, 0).text()) - float(model.item(i - 1, 1).text()))
-            temp_grad = (temperature - float(model.item(i - 1, 3).text()))/delta_vert_depth
+            temp_grad = ((temperature - float(model.item(i - 1, 3).text()))/delta_vert_depth)*100
 
         except: # первая строка
             ro = 0.
@@ -603,8 +655,7 @@ def make_shelfs_blob(Ppl):
         float_series=float_series.append(temp_series, ignore_index=True)
         blob += float_series.to_numpy().tobytes()
     return blob
-    #print(Ppl.well_name, len(blob), blob)
-    #blob_what_is_what(blob)
+
 
 def insert_data_to_sosresearchgraph_table(Ppl):
     rgrid = make_id()
@@ -741,23 +792,41 @@ def insert_data_to_sosresearchperforation_table(Ppl):
     with sql_query() as connection:
         cursor = connection.cursor()
         for research_layer_id, bedid in zip(Ppl.OTS_research_layer_input_ids, Ppl.layers_ids):
-            print("!!!!!!")
-            print(bedid, Ppl.OTS_Well_ID)
             Sql_Q = '''SELECT * FROM ots_bn.sosperforation
                     WHERE (ots_bn.sosperforation.prfbedid = :bedid) AND
                     (ots_bn.sosperforation.prfwellid = :wellid)'''
             cursor.execute(Sql_Q, bedid=bedid, wellid=Ppl.OTS_Well_ID)
             rows = cursor.fetchall()
-            print(rows)
+            min_perf = 99999999
             for row in rows:
-                print("@@@@@")
-                print(row)
                 new_row = [row[1], row[2], row[6], research_layer_id, row[5]]
-                print(new_row)
                 Sql_Q = '''INSERT INTO ots_bn.sosresearchperforation
                 VALUES (:1,:2,:3,:4,:5)'''
                 cursor.execute(Sql_Q, new_row)
                 connection.commit()
+
+                if row[1] < min_perf:
+                    perf = row[1]
+                    pvdp = Ppl.ppl + (perf - search_and_interpolate(Ppl.incl, perf) - Ppl.vdp + Ppl.vdp_elong) * Ppl.ro/10
+                    Sql_Q = '''SELECT ots_bn.sosbed.BEDWATEROILCONTACT FROM ots_bn.sosbed
+                                WHERE (ots_bn.sosbed.bedid = :bedid)'''
+                    cursor.execute(Sql_Q, bedid=bedid)
+                    vnk = cursor.fetchone()[0]
+                    pvnk = Ppl.ppl + (vnk - Ppl.vdp + Ppl.vdp_elong + Ppl.altitude)*Ppl.ro/10
+                    Ppl.OTS_researchmarkerlayer[research_layer_id] = [pvdp, pvnk]
+                    min_perf = row[1]
+
+def insert_data_to_sosresearchmarkerlayer_table(Ppl):
+    with sql_query() as connection:
+        cursor = connection.cursor()
+        for research_layer_id in Ppl.OTS_research_layer_input_ids:
+            row = [research_layer_id, 4, datetime.datetime.now(), None,
+                   Ppl.OTS_researchmarkerlayer[research_layer_id][0],
+                   Ppl.OTS_researchmarkerlayer[research_layer_id][1], None, None]
+            Sql_Q = '''INSERT INTO ots_bn.sosresearchmarkerlayer
+            VALUES (:1, :2, :3, :4, :5, :6, :7, :8)'''
+            cursor.execute(Sql_Q, row)
+            connection.commit()
 
 def row_permutation(row, indexes):
     def permutator(List, i):
@@ -921,3 +990,15 @@ def search_and_interpolate(searching_array, x, interpolate=True):
             return column2.iloc[left - 1] + abs((column2.iloc[right] - column2.iloc[left - 1]) * percent)
         else:
             return column2.iloc[left]
+
+class IntDelegate(QStyledItemDelegate):
+
+    def __init__(self, parent=None):
+        super(IntDelegate, self).__init__()
+
+
+    def createEditor(self, parent: QWidget, option: 'QStyleOptionViewItem', index: QtCore.QModelIndex) -> QWidget:
+        line_edit = QLineEdit(parent)
+        validator = QIntValidator(10,1000,line_edit)
+        line_edit.setValidator(validator)
+        return line_edit

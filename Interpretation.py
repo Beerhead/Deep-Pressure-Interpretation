@@ -10,6 +10,9 @@ import pylzma
 from sys import byteorder
 import Other
 from collections import Counter
+from Other import PlotWidget2
+from PyQt5 import QtGui, QtCore
+from statistics import median, mean
 
 index = ['d4+A31plakuShf1sT9STqg', 'KP5sao1H3UK6UUOO5H/D4A',
          '9GJ+Twe4e0mFcQjZkVD2SQ', 'N43A6ZYo0kGxs9l2dXuFGg',
@@ -89,6 +92,7 @@ class Ppl:
         self.table_ind = None
         self.ro = None
         self.ppl = None
+        self.pvnk = None
         self.final_data = None
         self.final_fig = None
         self.sup_times = None
@@ -113,6 +117,9 @@ class Ppl:
         self.layers_ids = None
         self.OTS_research_well_ID = None
         self.OTS_research_layer_input_ids = []
+        self.OTS_researchmarkerlayer = {}
+        self.central_dots = []
+        self.warning = False
         if not new:
             self.get_well_params_old()
 
@@ -199,16 +206,21 @@ class Ppl:
             self.layers_ids = [i[1] for i in rows]
             layer = [sql_bed(i[1]) for i in rows]
             self.layer = set(layer)
+
+
+
             cursor.execute('''SELECT ots_bn.soswell.WELANGULARITYTESTDEPTH,
                             ots_bn.soswell.WELANGULARITYTESTELONGATION,
                             ots_bn.soswell.welorganizationid,
-                            ots_bn.soswell.welfieldid
+                            ots_bn.soswell.welfieldid,
+                            ots_bn.soswell.WELALTITUDE
                             from ots_bn.soswell
                             WHERE ots_bn.soswell.welid = :wellid''',
                            wellid=self.OTS_Well_ID)
             rows = cursor.fetchone()
             self.tzeh_id = rows[2]
             self.OTS_Field_ID = rows[3]
+            self.altitude = rows[4]
             try:
                 bytes_len = int.from_bytes(rows[0].read()[3:7], byteorder=byteorder)
                 depth = pd.Series(
@@ -221,6 +233,7 @@ class Ppl:
                     np.frombuffer(pylzma.decompress(rows[1].read()[7:], maxlength=bytes_len), dtype=np.dtype('f')))
             except:
                 elong = pd.Series(np.frombuffer(rows[1].read()[3:], dtype=np.dtype('f')))
+
             self.incl = pd.concat([depth, elong], axis=1)
             self.vdp_elong = round(Other.search_and_interpolate(self.incl, self.vdp), 2)
             temp_pressure_time_series = self.data.iloc[:, 0]
@@ -276,6 +289,522 @@ class Ppl:
         self.incl.dropna(inplace=True, how='all')
         self.vdp_elong = Other.search_and_interpolate(self.incl, self.vdp)
 
+
+    def interpretate(self, delta, pModel, dModel):
+        transformedData = self.transformData()
+        oneZeroIndexes = self.divideEtImpera(transformedData, pModel, dModel)
+        offsetSplittedData = self.biasAndSplitting(oneZeroIndexes)
+        dataList, self.timesList = self.makeDataForModels(offsetSplittedData, delta)
+        self.finalCalc(dataList, self.timesList, offsetSplittedData)
+
+        return self
+
+    def transformData(self):
+        kt_pres = self.data.iloc[:, 0].count()
+        kt_dep = self.data.iloc[:, 4].count()
+        print('KT = ', kt_pres, " KD = ", kt_dep)
+        templistp = []
+        for p in range(1, kt_pres - 1):
+            templistp.append((self.data.iloc[p + 1, 1] - self.data.iloc[p - 1, 1]) / (self.data.iloc[p + 1, 0] -
+                                                                      self.data.iloc[p - 1, 0]).total_seconds() / 86400)
+        templistp.append(templistp[-1])
+        templistp.insert(0, templistp[0])
+        templisttime1 = []
+        for p in range(0, kt_pres):
+            templisttime1.append(self.data.iloc[p, 0].day +
+                                 self.data.iloc[p, 0].hour / 24 +
+                                 self.data.iloc[p, 0].minute / 1440 +
+                                 self.data.iloc[p, 0].second / 86400)
+
+        templistd = []
+        for p in range(1, kt_dep - 1):
+            templistd.append((self.data.iloc[p + 1, 4] - self.data.iloc[p - 1, 4]) / (self.data.iloc[p + 1, 3] -
+                                                                      self.data.iloc[p - 1, 3]).total_seconds() / 86400)
+        templistd.append(templistd[-1])
+        templistd.insert(0, templistd[0])
+        templisttime2 = []
+        for p in range(0, kt_dep):
+            templisttime2.append(self.data.iloc[p, 3].day +
+                                 self.data.iloc[p, 3].hour / 24 +
+                                 self.data.iloc[p, 3].minute / 1440 +
+                                 self.data.iloc[p, 3].second / 86400)
+        p_max = max((p for p in templistp if p < 10000))
+        p_min = min((p for p in templistp if p > -10000))
+        d_max = max((d for d in templistd if d < 100000))
+        d_min = min((d for d in templistd if d > -100000))
+        ext1 = pd.Series(templisttime1)
+        ext2 = pd.Series(templistp)
+        ext3 = self.data.iloc[:, 1]
+        ext4 = pd.Series(templisttime2)
+        ext5 = pd.Series(templistd)
+        ext6 = self.data.iloc[:, 4]
+        ext2.mask(ext2 > 10000, p_max, inplace=True)
+        ext2.mask(ext2 < -10000, p_min, inplace=True)
+        ext5.mask(ext5 > 100000, d_max, inplace=True)
+        ext5.mask(ext5 < -100000, d_min, inplace=True)
+        prescaled_sample = pd.concat([ext1, ext2, ext3, ext4, ext5, ext6], axis=1)
+        return prescaled_sample
+
+    def divideEtImpera(self, receivedData, pModel, dModel):
+        data = receivedData
+
+        sampleindexes = []
+        kt_pres = data.iloc[:, 0].count()
+        kt_dep = data.iloc[:, 3].count()
+        pres_data = data.iloc[:kt_pres, 0:3]
+        depth_data = data.iloc[:kt_dep, 3:]
+        scalerp = MinMaxScaler()
+        scalerp.fit(pres_data)
+        scalerd = MinMaxScaler()
+        scalerd.fit(depth_data)
+        pipeline_pres = Pipeline([
+            ("scaler", scalerp),
+            ("etc", pModel)
+        ])
+        pipeline_depth = Pipeline([
+            ("scaler", scalerd),
+            ("etc", dModel)
+        ])
+        pres_pred = pipeline_pres.predict(pres_data)
+        depth_pred = pipeline_depth.predict(depth_data)
+        pres_pred = pres_pred.tolist()
+        depth_pred = depth_pred.tolist()
+
+        quan_pred = min(pres_pred.count(2) / 2, 30)
+        quan_depth = min(depth_pred.count(2) / 2, 30)
+        quan_pred = max(quan_pred, 5)
+        quan_depth = max(quan_depth, 5)
+        finalindexes = [None, None, None, None]
+
+        # pressures
+        pres_data_no_deriv = pres_data.iloc[:, [0, 2]]
+        pres_data_no_deriv.iloc[:, 0] = pres_data_no_deriv.iloc[:,
+                                        0].apply(lambda x: x * 24 * 60 - pres_data_no_deriv.iloc[:, 0].min())
+
+        srez = pres_data_no_deriv.iloc[:, 1]
+        max_pres = srez.max()
+        ind98 = []
+        for i in range(srez.count()):
+            if srez[i] > max_pres * 0.98 and len(ind98) == 0:
+                ind98.append(i)
+            if srez[i] < max_pres * 0.98 and len(ind98) == 1:
+                ind98.append(i)
+        min_feature = 0
+        for i in range(ind98[0], int((ind98[0] + ind98[1]) / 2)):
+            t0 = int(i - quan_pred) + 1
+            t2 = int(i + quan_pred)
+            pres1 = pres_data_no_deriv.iloc[t0 + 1:i + 1, :].values
+            pres2 = pres_data_no_deriv.iloc[i:t2, :].values
+            x1 = pres1[:, 0]
+            y1 = pres1[:, 1]
+            c1, stats1 = Poly.polyfit(x1, y1, 1, full=True)
+            y_lin1 = Poly.polyval(x1, c1)
+            r2 = r2_score(y1, y_lin1)
+            k1 = c1[1]
+            x2 = pres2[:, 0]
+            y2 = pres2[:, 1]
+            c2, stats2 = Poly.polyfit(x2, y2, 1, full=True)
+            y_lin2 = Poly.polyval(x2, c2)
+            r2 += r2_score(y2, y_lin2)
+            k2 = c2[1]
+            tan = abs((k1 - k2) / (1 + k1 * k2))
+            atan = round(np.arctan(tan), 5)
+            if atan > min_feature:
+                min_feature = atan
+                finalindexes[0] = i
+
+        min_feature = 0
+
+        for i in range(int((ind98[0] + ind98[1]) / 2), ind98[1]):
+            t0 = int(i - quan_pred) + 1
+            t2 = int(i + quan_pred)
+            pres1 = pres_data_no_deriv.iloc[t0 + 1:i + 1, :].values
+            pres2 = pres_data_no_deriv.iloc[i:t2, :].values
+            x1 = pres1[:, 0]
+            y1 = pres1[:, 1]
+            c1, stats1 = Poly.polyfit(x1, y1, 1, full=True)
+            y_lin1 = Poly.polyval(x1, c1)
+            r2 = r2_score(y1, y_lin1)
+            k1 = c1[1]
+            x2 = pres2[:, 0]
+            y2 = pres2[:, 1]
+            c2, stats2 = Poly.polyfit(x2, y2, 1, full=True)
+            y_lin2 = Poly.polyval(x2, c2)
+            r2 += r2_score(y2, y_lin2)
+            k2 = c2[1]
+            tan = abs((k1 - k2) / (1 + k1 * k2))
+            atan = round(np.arctan(tan), 5)
+            if atan > min_feature:
+                min_feature = atan
+                finalindexes[1] = i
+
+        # depths
+        depth_data_no_deriv = depth_data.iloc[:, [0, 2]]
+        depth_data_no_deriv.iloc[:, 0] = depth_data_no_deriv.iloc[:, 0].apply(lambda x:
+                                                                              x * 24 * 60 - depth_data_no_deriv.iloc[
+                                                                                            :,
+                                                                                            0].min())
+
+        srez = depth_data_no_deriv.iloc[:, 1]
+        max_depth = srez.max()
+        ind98 = []
+        for i in range(srez.count()):
+            if srez[i] > max_depth * 0.98 and len(ind98) == 0:
+                ind98.append(i)
+            if srez[i] < max_depth * 0.98 and len(ind98) == 1:
+                ind98.append(i)
+        min_feature = 0
+
+        for i in range(ind98[0], int((ind98[0] + ind98[1]) / 2)):
+            t0 = int(i - quan_depth) + 1
+            t2 = int(i + quan_depth)
+            depth1 = depth_data_no_deriv.iloc[t0 + 1:i + 1, :].values
+            depth2 = depth_data_no_deriv.iloc[i:t2, :].values
+            x1 = depth1[:, 0]
+            y1 = depth1[:, 1]
+            c1, stats1 = Poly.polyfit(x1, y1, 1, full=True)
+            y_lin1 = Poly.polyval(x1, c1)
+            r2 = r2_score(y1, y_lin1)
+            k1 = c1[1]
+            x2 = depth2[:, 0]
+            y2 = depth2[:, 1]
+            c2, stats2 = Poly.polyfit(x2, y2, 1, full=True)
+            y_lin2 = Poly.polyval(x2, c2)
+            r2 += r2_score(y2, y_lin2)
+            k2 = c2[1]
+            tan = abs((k1 - k2) / (1 + k1 * k2))
+            atan = round(np.arctan(tan), 5)
+            if atan > min_feature:
+                min_feature = atan
+                finalindexes[2] = i
+
+        min_feature = 0
+
+        for i in range(int((ind98[0] + ind98[1]) / 2), ind98[1]):
+            t0 = int(i - quan_depth) + 1
+            t2 = int(i + quan_depth)
+            depth1 = depth_data_no_deriv.iloc[t0 + 1:i + 1, :].values
+            depth2 = depth_data_no_deriv.iloc[i:t2, :].values
+            x1 = depth1[:, 0]
+            y1 = depth1[:, 1]
+            c1, stats1 = Poly.polyfit(x1, y1, 1, full=True)
+            y_lin1 = Poly.polyval(x1, c1)
+            r2 = r2_score(y1, y_lin1)
+            k1 = c1[1]
+            x2 = depth2[:, 0]
+            y2 = depth2[:, 1]
+            c2, stats2 = Poly.polyfit(x2, y2, 1, full=True)
+            y_lin2 = Poly.polyval(x2, c2)
+            r2 += r2_score(y2, y_lin2)
+            k2 = c2[1]
+            tan = abs((k1 - k2) / (1 + k1 * k2))
+            atan = round(np.arctan(tan), 5)
+            if atan > min_feature:
+                min_feature = atan
+                finalindexes[3] = i
+        return finalindexes
+
+    def biasAndSplitting(self, receivedIndexes):
+        ind = receivedIndexes
+        self.central_dots = [(ind[0] + ind[1]) / 2, (ind[2] + ind[3]) / 2]
+        delimeter_pres = int((ind[0] + ind[1]) / 2)
+        delimeter_depth = int((ind[2] + ind[3]) / 2)
+        dt1 = self.data.iloc[ind[0], 0] - self.data.iloc[ind[2], 3]
+        dt2 = self.data.iloc[ind[1], 0] - self.data.iloc[ind[3], 3]
+        datab1 = self.data.copy()
+        datab2 = self.data.copy()
+        target_name = self.data.columns[3]
+        datab1[target_name] = datab1[target_name].apply(lambda x: x + dt1)
+        datab2[target_name] = datab2[target_name].apply(lambda x: x + dt2)
+        db1 = pd.concat([datab1.iloc[:delimeter_pres, 0],
+                         datab1.iloc[:delimeter_pres, 1],
+                         datab1.iloc[:delimeter_pres, 2],
+                         datab1.iloc[:delimeter_depth, 3],
+                         datab1.iloc[:delimeter_depth, 4]], axis=1)
+        pre_db2_1 = pd.concat([datab2.iloc[delimeter_pres:, 0],
+                               datab2.iloc[delimeter_pres:, 1],
+                               datab2.iloc[delimeter_pres:, 2]], axis=1)
+        pre_db2_1.reset_index(inplace=True, drop=True)
+        pre_db2_2 = pd.concat([datab2.iloc[delimeter_depth:, 3],
+                               datab2.iloc[delimeter_depth:, 4]], axis=1)
+        pre_db2_2.reset_index(inplace=True, drop=True)
+        pre_db2_2.dropna(inplace=True, how='all')
+        db2 = pd.concat([pre_db2_1, pre_db2_2], axis=1)
+        double_data = [db1, db2]
+        return double_data
+
+    def supportDots(self, data, interval):
+
+        tempd = []
+        tempe = []
+        tempp = []
+        tempt = []
+        tempti = []
+        for polka in data:
+            temp_depths = []
+            temp_elongations = []
+            temp_pressures = []
+            temp_temperatures = []
+            temp_times = []
+            max_depth = int(max(polka.iloc[:, 4]))
+            min_depth = int(max(min(polka.iloc[:, 4]), 0))
+            for depth in range(min_depth, max_depth):
+                if depth % interval == 0 and (max_depth - depth) > 30:
+                    temp_depths.append(depth)  # глубины
+                    temp_elongations.append(round(Other.search_and_interpolate(self.incl, depth), 2))  # удлинения
+                    search_array = polka.iloc[:, [4, 3]]  # давления
+                    search_array.dropna(inplace=True, how='all')
+                    temp_time = Other.search_and_interpolate(search_array, depth)
+                    temp_times.append(temp_time)
+                    search_array = polka.iloc[:, [0, 1]]
+                    search_array.dropna(inplace=True, how='all')
+                    temp_pressures.append(round(Other.search_and_interpolate(search_array, temp_time), 2))
+                    search_array = polka.iloc[:, [0, 2]]  # температуры
+                    search_array.dropna(inplace=True, how='all')
+                    temp_temperatures.append(round(Other.search_and_interpolate(search_array, temp_time), 2))
+            temp_depths.append(max_depth)  # глубины
+            tempd.append(temp_depths)
+            temp_elongations.append(round(Other.search_and_interpolate(self.incl, max_depth), 2))  # удлинения
+            tempe.append(temp_elongations)
+            # давления
+            search_array = polka.iloc[:, [4, 3]]
+            search_array.dropna(inplace=True, how='all')
+            temp_time = Other.search_and_interpolate(search_array, max_depth)
+            search_array = polka.iloc[:, [0, 1]]
+            search_array.dropna(inplace=True, how='all')
+            temp_pressures.append(round(Other.search_and_interpolate(search_array, temp_time), 2))
+            tempp.append(temp_pressures)
+            # температуры
+            search_array = polka.iloc[:, [0, 2]]
+            search_array.dropna(inplace=True, how='all')
+            temp_temperatures.append(round(Other.search_and_interpolate(search_array, temp_time), 2))
+            tempt.append(temp_temperatures)
+            temp_times.append(temp_time)
+            tempti.append(temp_times)
+
+        # depths.append(tempd)
+        # elongations.append(tempe)
+        # pressures.append(tempp)
+        # temperatures.append(tempt)
+        # times.append(tempti)
+        return tempd, tempe, tempp, tempt, tempti
+
+    def makeDataForModels(self, splittedData, delta):
+        data = splittedData
+        depths, elongations, pressures, temperatures, times = self.supportDots(data, delta)
+        calctable = []
+        for i in range(0, 2):
+            kt = len(depths[i])
+            sample = []
+            for j in range(0, kt):
+                if j == 0:
+                    ro = None
+                else:
+                    ro = round((pressures[i][j] - pressures[i][j - 1]) /
+                               (depths[i][j] - elongations[i][j] - depths[i][j - 1] + elongations[i][j - 1]) * 10, 3)
+                union = [depths[i][j], elongations[i][j], pressures[i][j], temperatures[i][j], ro]
+                sample.append(union)
+            calctable.append(sample)
+
+
+        for nomer_polki, polka in enumerate(calctable):
+            a = polka[-1][4]
+            b = polka[-2][4]
+            c = polka[-3][4]
+            mean_ro = (a + b + c) / 3
+            cond1 = (max(a, mean_ro) - a) / max(a, mean_ro) > 0.15
+            cond2 = (max(b, mean_ro) - b) / max(b, mean_ro) > 0.15
+            cond3 = (max(c, mean_ro) - c) / max(c, mean_ro) > 0.15
+            if cond1 or cond2 or cond3 or len(polka) < 7:
+                depths, elongations, pressures, temperatures, retiming = self.supportDots(data, delta/2)
+                kt = len(depths[nomer_polki])
+                sample = []
+                time_sample = []
+                for j in range(0, kt):
+                    union = [depths[nomer_polki][j], elongations[nomer_polki][j], pressures[nomer_polki][j], temperatures[nomer_polki][j]]
+                    sample.append(union)
+                    time_sample.append(retiming[nomer_polki][j])
+                calctable[nomer_polki] = sample
+                times[nomer_polki] = time_sample
+            for p in polka:
+                if len(p) == 5:
+                    p.pop()
+
+        return calctable, times
+
+    def finalCalc(self, dataList, timeList, newData):
+
+        model_pair = []
+        ro_pair = []
+        ppl_pair = []
+        f_type_pair = []
+        checks_pair = []
+        for polka in dataList:
+            temp_model, ro, ppl, f_type, checks = self.makeModel(polka)
+            model_pair.append(temp_model)
+            ro_pair.append(ro)
+            ppl_pair.append(ppl)
+            f_type_pair.append(f_type)
+            checks_pair.append(checks)
+        self.table_models = model_pair
+        self.checks = checks_pair
+        self.sup_times = timeList
+        self.data_from_sup_times = dataList
+        if f_type_pair[0] == "Water":
+            target = 1.16
+        else:
+            target = 0.88
+        cond1 = (max(target, ro_pair[0]) - min(target, ro_pair[0])) / max(target, ro_pair[0])
+        cond2 = (max(target, ro_pair[1]) - min(target, ro_pair[1])) / max(target, ro_pair[1])
+        if self.checks[0] > self.checks[1]:
+            self.table_ind = 0
+            self.ro = ro_pair[0]
+            self.ppl = ppl_pair[0]
+        elif self.checks[0] < self.checks[1]:
+            self.table_ind = 1
+            self.ro = ro_pair[1]
+            self.ppl = ppl_pair[1]
+        else:
+            if cond1 > cond2:
+                self.table_ind = 0
+                self.ro = ro_pair[0]
+                self.ppl = ppl_pair[0]
+            else:
+                self.table_ind = 1
+                self.ro = ro_pair[1]
+                self.ppl = ppl_pair[1]
+
+        if f_type_pair[0] != f_type_pair[1]:
+            self.warning = True
+
+        t1 = newData[0].iloc[:, [0, 1, 2]]
+        t2 = newData[1].iloc[:, [0, 1, 2]]
+        if t1.isnull().sum().sum() > 0:
+            t1.dropna(inplace=True, how='all')
+        if t2.isnull().sum().sum() > 0:
+            t2.dropna(inplace=True, how='all')
+        pres = pd.concat([t1, t2], axis=0)
+        pres.reset_index(inplace=True, drop=True)
+        t3 = newData[0].iloc[:, [3, 4]]
+        t4 = newData[1].iloc[:, [3, 4]]
+        if t3.isnull().sum().sum() > 0:
+            t3.dropna(inplace=True, how='all')
+        if t4.isnull().sum().sum() > 0:
+            t4.dropna(inplace=True, how='all')
+        dep = pd.concat([t3, t4], axis=0)
+        dep.reset_index(inplace=True, drop=True)
+        temp = pd.concat([pres, dep], axis=1)
+        self.final_data = temp
+        temp_pw = PlotWidget2()
+        self.final_fig = temp_pw.plot(temp, save=True)
+        self.calc_avg_temp_gradient()
+        self.calc_phase_borders()
+        self.determine_static_level()
+
+    def makeModel(self, halfData):
+        model = QtGui.QStandardItemModel(len(halfData), 7)
+        model.setHorizontalHeaderLabels(['Depth', 'Elongation', 'Pressure', 'Temperature', 'Density', 'Fluid type', ''])
+        densities = [0]
+        types = ['']
+        for row in range(len(halfData)):
+            for col in range(7):
+                if col in range(4):
+                    item = QtGui.QStandardItem(str(halfData[row][col]))
+                elif col == 4:
+                    if row != 0:
+                        ro = round((halfData[row][2] - halfData[row - 1][2]) /
+                                   (halfData[row][0] - halfData[row][1] - halfData[row - 1][0] +
+                                    halfData[row - 1][
+                                        1]) * 10, 3)
+                        densities.append(ro)
+                        item = QtGui.QStandardItem(str(ro))
+
+                elif col == 5:
+                    if row != 0:
+                        if ro < 0.7:
+                            item = QtGui.QStandardItem("Gas")
+                        elif 0.7 < ro < 0.98:
+                            item = QtGui.QStandardItem("Oil")
+                        else:
+                            item = QtGui.QStandardItem("Water")
+                        types.append(item.text())
+                elif col == 6:
+                    if row != 0:
+                        item = QtGui.QStandardItem()
+                        item.setCheckable(True)
+                item.setTextAlignment(QtCore.Qt.AlignCenter)
+                model.setItem(row, col, item)
+        kt = round(len(halfData) / 3) + 1
+        calc_list = densities[-kt:]
+        types_list = types[-kt:]
+        ref_type = None
+        if types_list[-1] == types_list[-2] and 0.7 < calc_list[-1] < 1.25 and 0.7 < calc_list[-2] < 1.25:
+            ref_type = types_list[-1]
+        elif types_list[-1] != types_list[-2] and 0.7 < calc_list[-1] < 1.25 and 0.7 < calc_list[-2] < 1.25:
+            if types_list[-2] == types_list[-3] and 0.7 < calc_list[-2] < 1.25 and 0.7 < calc_list[-3] < 1.25:
+                ref_type = types_list[-2]
+            elif types_list[-2] != types_list[-3] and 0.7 < calc_list[-2] < 1.25 and 0.7 < calc_list[-3] < 1.25:
+                if types_list[-3] == types_list[-4] and 0.7 < calc_list[-3] < 1.25 and 0.7 < calc_list[-4] < 1.25:
+                    ref_type = types_list[-3]
+            else:
+                max_num = 0
+                types_set = set(types_list)
+                for fluid_type in types_set:
+                    num = types_list.count(fluid_type)
+                    if num > max_num:
+                        max_num = num
+                        ref_type = fluid_type
+        else:
+            max_num = 0
+            types_set = set(types_list)
+            for fluid_type in types_set:
+                num = types_list.count(fluid_type)
+                if num > max_num:
+                    max_num = num
+                    ref_type = fluid_type
+        if ref_type == "Water":
+            target = 1.16
+            calc_list = [ro for ro in calc_list if ro >= 0.98]
+        else:
+            target = 0.88
+            calc_list = [ro for ro in calc_list if 0.7 < ro < 0.98]
+        if len(calc_list) % 2 == 0:
+            med_ro2 = median(calc_list)
+            indic = False
+            for i in range(len(calc_list) - 1):
+                if calc_list[i] < med_ro2 < calc_list[i + 1]:
+                    med_ro1 = calc_list[i]
+                    med_ro3 = calc_list[i + 1]
+                    indic = True
+                if i == len(calc_list) - 2 and indic == False:
+                    med_ro1 = med_ro2
+                    med_ro3 = med_ro2
+            cond1 = (max(target, med_ro1) - min(target, med_ro1)) / max(target, med_ro1)
+            cond2 = (max(target, med_ro2) - min(target, med_ro2)) / max(target, med_ro2)
+            cond3 = (max(target, med_ro3) - min(target, med_ro3)) / max(target, med_ro3)
+            if cond1 == min(cond1, cond2, cond3):
+                med_ro = med_ro1
+            elif cond2 == min(cond1, cond2, cond3):
+                med_ro = med_ro2
+            else:
+                med_ro = med_ro3
+        else:
+            med_ro = median(calc_list)
+        final_ro = []
+        for row in range(len(halfData) - kt, len(halfData)):
+            m1 = max(float(model.index(row, 4).data()), med_ro)
+            m2 = min(float(model.index(row, 4).data()), med_ro)
+            if model.index(row, 5).data() == ref_type and (m1 - m2) / m1 < 0.08:
+                model.item(row, 6).setCheckState(2)
+                final_ro.append(float(model.item(row, 4).text()))
+        if 0.8 > mean(final_ro) or 1.2 < mean(final_ro) or 0.8 > mean(final_ro) or 1.2 < mean(final_ro):
+            self.warning = True
+        man_abs_depth = float(model.item(len(halfData) - 1, 0).text()) - float(
+            model.item(len(halfData) - 1, 1).text())
+        vdp_abs_depth = self.vdp - self.vdp_elong
+        delta = vdp_abs_depth - man_abs_depth
+        ppl = round(float(model.item(len(halfData) - 1, 2).text()) + delta * mean(final_ro) / 10, 3)
+        return model, round(mean(final_ro), 3), ppl, ref_type, len(final_ro)
 
 class AutoInterpretation:
 
@@ -334,6 +863,7 @@ class AutoInterpretation:
             ext5.mask(ext5 < -100000, d_min, inplace=True)
             prescaled_sample = pd.concat([ext1, ext2, ext3, ext4, ext5, ext6], axis=1)
             self.fed_data.append(prescaled_sample)
+            prescaled_sample.to_clipboard()
         return self.fed_data
 
     def divide_et_impera(self):
@@ -540,7 +1070,6 @@ class AutoInterpretation:
     @lru_cache()
     def bias_and_splitting(self):
         indexes = self.divide_et_impera()
-        print(indexes)
         freshdata = []
         central_dots=[]
         for i, d in enumerate(self.data):
@@ -688,6 +1217,8 @@ class AutoInterpretation:
                 for p in polka:
                     if len(p) == 5:
                         p.pop()
+        print(sample, times)
+        #print(calctables, times)
         return calctables, times
 
 
