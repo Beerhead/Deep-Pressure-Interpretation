@@ -14,22 +14,19 @@ warnings.filterwarnings('ignore')
 
 
 class MainWindow(QMainWindow):
-
+    """Main Window of application"""
     def __init__(self):
         super(MainWindow, self).__init__()
         pg.setConfigOption('background', 'w')
         pg.setConfigOption('foreground', 'k')
-        self.ResearchsList = []
+        self.researchsList = []
         self.initUi()
         self.connectUi()
         self.interpreted = False
-        self.dots_with_data = None
-        self.support_times = None
 
     def initUi(self):
-        self.testlist = QTableView()
-        self.testlist.setFixedWidth(315)
-        #self.testlist.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.testList = QTableView()
+        self.testList.setFixedWidth(315)
         self.centralWidget = QWidget(self)
         self.HL = QHBoxLayout(self.centralWidget)  # основной горизонтальный лэйаут
         self.VL1 = QVBoxLayout()  # вертикал лэй №1
@@ -38,37 +35,30 @@ class MainWindow(QMainWindow):
         pg.setConfigOption('background', 'w')
         pg.setConfigOption('foreground', 'k')
         self.plotWidget2 = PlotWidget2()
-        self.rb1 = QRadioButton("По спуску")
-        self.rb2 = QRadioButton("По подъему")
-        self.hltables = QHBoxLayout()  # лэй для двух таблиц
-        self.calctable1 = QTableView()
-        self.calctable2 = QTableView()
-        self.calctable1.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.calctable2.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.reslabel = QLabel('Данные по скважине')
-        self.reslabel.setAlignment(Qt.AlignCenter)
-        self.hltables.addWidget(self.calctable1)
-        self.hltables.addWidget(self.calctable2)
-        self.label_ch_box_lay = QVBoxLayout()  # лэй для лэйбла и чекбоксов
-        self.ch_box_lay = QHBoxLayout()
-        self.ch_box_lay.addWidget(self.rb1)
-        self.ch_box_lay.addWidget(self.rb2)
-        self.ch_box_lay.setAlignment(Qt.AlignCenter)
+        self.RB1 = QRadioButton("По спуску")
+        self.RB2 = QRadioButton("По подъему")
+        self.HLTables = QHBoxLayout()  # лэй для двух таблиц
+        self.calctTable1 = QTableView()
+        self.calcTable2 = QTableView()
+        self.calctTable1.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.calcTable2.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.resLabel = QLabel('Данные по скважине')
+        self.resLabel.setAlignment(Qt.AlignCenter)
+        self.HLTables.addWidget(self.calctTable1)
+        self.HLTables.addWidget(self.calcTable2)
+        self.labelChBoxLay = QVBoxLayout()  # лэй для лэйбла и чекбоксов
+        self.chBoxLay = QHBoxLayout()
+        self.chBoxLay.addWidget(self.RB1)
+        self.chBoxLay.addWidget(self.RB2)
+        self.chBoxLay.setAlignment(Qt.AlignCenter)
         self.deltaEdit = QLineEdit("100")
         self.deltaEdit.setAlignment(Qt.AlignCenter)
         self.deltaEdit.setMaximumWidth(60)
         self.deltaEdit.setValidator(QIntValidator(1, 1000))
-        self.line1 = QLabel("Дельта глубины")
-        self.line1.setMaximumWidth(100)
-        self.line1.setAlignment(Qt.AlignCenter)
-        self.layout2 = QHBoxLayout()
-        self.layout2.addWidget(self.line1)
-        self.layout2.addWidget(self.deltaEdit)
-        self.label_ch_box_lay.addLayout(self.layout2)
-        self.label_ch_box_lay.addLayout(self.ch_box_lay)
-        self.label_ch_box_lay.addWidget(self.reslabel)
-        self.label_ch_box_lay.setAlignment(Qt.AlignCenter)
-        self.hltables.addLayout(self.label_ch_box_lay)
+        self.labelChBoxLay.addLayout(self.chBoxLay)
+        self.labelChBoxLay.addWidget(self.resLabel)
+        self.labelChBoxLay.setAlignment(Qt.AlignCenter)
+        self.HLTables.addLayout(self.labelChBoxLay)
         self.GL = QGridLayout()  # лэй для кнопок
         self.btn1 = QPushButton('Открыть файлы')
         self.btn2 = QPushButton('Замеры ОТС')
@@ -80,328 +70,221 @@ class MainWindow(QMainWindow):
         self.GL.addWidget(self.btn2, 1, 2)
         self.GL.addWidget(self.btn3, 2, 1)
         self.GL.addWidget(self.btn4, 2, 2)
-        self.measurewidget = MeasurementsWidget(self)
-
+        self.measureWidget = MeasurementsWidget(self)
+        self.gifDialog = gifDialog()
         # добавка 2 графика
-
-        self.hl_graph_layout = QHBoxLayout()
-        self.hl_graph_layout.addWidget(self.plotWidget2)
-        self.VL1.addLayout(self.hltables)
-        self.VL1.addLayout(self.hl_graph_layout)
-        self.VL2.addWidget(self.testlist)
+        self.hlGraphLayout = QHBoxLayout()
+        self.hlGraphLayout.addWidget(self.plotWidget2)
+        self.VL1.addLayout(self.HLTables)
+        self.VL1.addLayout(self.hlGraphLayout)
+        self.VL2.addWidget(self.testList)
         self.VL2.addLayout(self.GL)
         self.HL.addLayout(self.VL1)
         self.HL.addLayout(self.VL2)
         self.setCentralWidget(self.centralWidget)
-        self.gifdialog = QtWidgets.QDialog()
-        self.gifdialog.setFixedSize(252, 252)
-        self.m_label = QLabel(self.gifdialog)
-        self.movie = QMovie()
-        self.movie.setFileName(os.getcwd() + r"\mgc.gif")
-        self.m_label.setMovie(self.movie)
-        self.m_label.setFixedSize(252,252)
 
-
-        self.gifdialog.setWindowFlag(QtCore.Qt.SplashScreen)
 
     def connectUi(self):
 
-        #self.btn1.clicked.connect(self.get_files_paths_and_read_files)
-        self.btn2.clicked.connect(lambda: self.measurewidget.show())
-        self.btn3.clicked.connect(self.interpretate_researches)
+        self.btn2.clicked.connect(lambda: self.measureWidget.show())
+        self.btn3.clicked.connect(self.interpretateResearches)
         self.btn4.clicked.connect(self.reports)
-        self.testlist.clicked.connect(self.graf)
-        self.calctable1.clicked.connect(self.graf)
-        self.calctable2.clicked.connect(self.graf)
-        self.rb1.clicked.connect(self.rb1_clicked)
-        self.rb2.clicked.connect(self.rb2_clicked)
-        self.plotWidget2.btn_spusk_pressed_signal.connect(lambda: self.add_inf_line(0))
-        self.plotWidget2.btn_podem_pressed_signal.connect(lambda: self.add_inf_line(1))
-        self.plotWidget2.line_signal_to_main.connect(self.inf_line_moved)
+        self.testList.clicked.connect(self.graf)
+        self.calctTable1.clicked.connect(self.graf)
+        self.calcTable2.clicked.connect(self.graf)
+        self.RB1.clicked.connect(self.RB1Clicked)
+        self.RB2.clicked.connect(self.RB2Clicked)
+        self.plotWidget2.btnSpuskPressedSignal.connect(lambda: self.addInfLine(0))
+        self.plotWidget2.btnPodemPressedSignal.connect(lambda: self.addInfLine(1))
+        self.plotWidget2.lineSignalToMain.connect(self.infLineMoved)
 
-    def receive_list(self, model_to_set, list_of_measuarements):
+    def receiveList(self, modelToSet, listOfMeasuarements):
 
-        self.listmodel = model_to_set
-        self.testlist.setModel(self.listmodel)
+        self.listModel = modelToSet
+        self.testList.setModel(self.listModel)
         delegate = IntDelegate()
-        delegate.createEditor(self.testlist, QStyleOptionViewItem(), QtCore.QModelIndex())
-        self.testlist.setItemDelegateForColumn(2, delegate)
-        self.ResearchsList = list_of_measuarements
+        delegate.createEditor(self.testList, QStyleOptionViewItem(), QtCore.QModelIndex())
+        self.testList.setItemDelegateForColumn(2, delegate)
+        self.researchsList = listOfMeasuarements
         self.btn3.setDisabled(False)
 
 
 
-    def add_inf_line(self, polka):
-        temp_ind = self.testlist.selectedIndexes()[0].row()
-        delta = (self.ResearchsList[temp_ind].sup_times[1][-1] - self.ResearchsList[temp_ind].sup_times[0][-1]) / 2
-        medium_time = self.ResearchsList[temp_ind].sup_times[0][-1] + delta
-        time, *_ = self.time_bind_inf_line(medium_time)
-        line = self.plotWidget2.make_inf_line(time, polka)
+    def addInfLine(self, polka):
+        tempInd = self.testList.selectedIndexes()[0].row()
+        delta = (self.researchsList[tempInd].sup_times[1][-1] - self.researchsList[tempInd].sup_times[0][-1]) / 2
+        mediumTime = self.researchsList[tempInd].sup_times[0][-1] + delta
+        time, *_ = self.timeBindInfLine(mediumTime)
+        line = self.plotWidget2.makeInfLine(time, polka)
         self.plotWidget2.plotItem.addItem(line)
-        line.inf_line_signal.connect(self.plotWidget2.emitting_to_main)
+        line.infLineSignal.connect(self.plotWidget2.emittingToMain)
 
 
-    def inf_line_moved(self, line, start, stop):
-        temp_ind = self.testlist.selectedIndexes()[0].row()
+    def infLineMoved(self, line, start, stop):
+        tempInd = self.testList.selectedIndexes()[0].row()
         stop = pd.Timestamp.fromtimestamp(stop)
         start = pd.Timestamp.fromtimestamp(start).round(freq='1S')
-        sup_times = self.ResearchsList[temp_ind].sup_times[line.polka]
-        true_false_list = [start == i.round(freq='1S') for i in sup_times]
-        time, depth, elong, pres, temper = self.time_bind_inf_line(stop)
+        supTimes = self.researchsList[tempInd].sup_times[line.polka]
+        trueFalseList = [start == i.round(freq='1S') for i in supTimes]
+        time, depth, elong, pres, temper = self.timeBindInfLine(stop)
         try:
-            index = true_false_list.index(True)
-            self.ResearchsList[temp_ind].sup_times[line.polka][index] = time
-            self.ResearchsList[temp_ind].data_from_sup_times[line.polka][index] = [depth, elong, pres, temper]
+            index = trueFalseList.index(True)
+            self.researchsList[tempInd].supTimes[line.polka][index] = time
+            self.researchsList[tempInd].dataFromSupTimes[line.polka][index] = [depth, elong, pres, temper]
         except:
-            self.ResearchsList[temp_ind].sup_times[line.polka].append(time)
-            self.ResearchsList[temp_ind].data_from_sup_times[line.polka].append([depth, elong, pres, temper])
-        self.ResearchsList[temp_ind].data_from_sup_times[line.polka].sort(key=lambda x: x[0])
-        model = self.ResearchsList[temp_ind].table_models[line.polka]
-        new_model, *_ = self.make_model(self.ResearchsList[temp_ind].data_from_sup_times[line.polka], temp_ind)
+            self.researchsList[tempInd].sup_times[line.polka].append(time)
+            self.researchsList[tempInd].data_from_sup_times[line.polka].append([depth, elong, pres, temper])
+        self.researchsList[tempInd].data_from_sup_times[line.polka].sort(key=lambda x: x[0])
+        newModel, *_ = self.researchsList[tempInd].makeModel(self.researchsList[tempInd].dataFromSupTimes[line.polka], tempInd)
         # for row in range(1, model.rowCount()):
-        #     new_model.item(row, 6).setCheckState(0)
+        #     newModel.item(row, 6).setCheckState(0)
         #     if model.item(row, 6).checkState() == 2:
-        #         new_model.item(row, 6).setCheckState(2)
-        self.ResearchsList[temp_ind].table_models[line.polka] = new_model
+        #         newModel.item(row, 6).setCheckState(2)
+        self.researchsList[tempInd].tableModels[line.polka] = newModel
         self.graf()
 
-    def time_bind_inf_line(self, time):
-        temp_ind = self.testlist.selectedIndexes()[0].row()
+    def timeBindInfLine(self, time):
+        tempInd = self.testList.selectedIndexes()[0].row()
         # по манометру
-        time_series = self.ResearchsList[temp_ind].final_data.iloc[:, 0]
-        time_series.dropna(inplace=True)
-        ind = time_series.searchsorted(time)
-        cond1 = (time_series[ind].timestamp() - time.timestamp()) / time_series[ind].timestamp()
-        cond2 = (time_series[ind + 1].timestamp() - time.timestamp()) / time_series[ind].timestamp()
+        timeSeries = self.researchsList[tempInd].final_data.iloc[:, 0]
+        timeSeries.dropna(inplace=True)
+        ind = timeSeries.searchsorted(time)
+        cond1 = (timeSeries[ind].timestamp() - time.timestamp()) / timeSeries[ind].timestamp()
+        cond2 = (timeSeries[ind + 1].timestamp() - time.timestamp()) / timeSeries[ind].timestamp()
         if cond1 < cond2:
-            final_ind = ind
+            finalInd = ind
         else:
-            final_ind = ind + 1
-        time = time_series[final_ind]
-        pres = self.ResearchsList[temp_ind].final_data.iloc[final_ind, 1]
-        temper = self.ResearchsList[temp_ind].final_data.iloc[final_ind, 2]
+            finalInd = ind + 1
+        time = timeSeries[finalInd]
+        pres = self.researchsList[tempInd].final_data.iloc[finalInd, 1]
+        temper = self.researchsList[tempInd].final_data.iloc[finalInd, 2]
         # по СПС
-        time_series = self.ResearchsList[temp_ind].final_data.iloc[:, 3]
-        time_series.dropna(inplace=True)
-        ind = time_series.searchsorted(time)
-        cond1 = (time_series[ind].timestamp() - time.timestamp()) / time_series[ind].timestamp()
-        cond2 = (time_series[ind + 1].timestamp() - time.timestamp()) / time_series[ind].timestamp()
+        timeSeries = self.researchsList[tempInd].final_data.iloc[:, 3]
+        timeSeries.dropna(inplace=True)
+        ind = timeSeries.searchsorted(time)
+        cond1 = (timeSeries[ind].timestamp() - time.timestamp()) / timeSeries[ind].timestamp()
+        cond2 = (timeSeries[ind + 1].timestamp() - time.timestamp()) / timeSeries[ind].timestamp()
         if cond1 < cond2:
-            final_ind = ind
+            finalInd = ind
         else:
-            final_ind = ind + 1
-        depth = self.ResearchsList[temp_ind].final_data.iloc[final_ind, 4]
-        elong = search_and_interpolate(self.ResearchsList[temp_ind].incl, depth)
+            finalInd = ind + 1
+        depth = self.researchsList[tempInd].final_data.iloc[finalInd, 4]
+        elong = searchAndInterpolate(self.researchsList[tempInd].incl, depth)
         return time, round(depth, 0), round(elong, 2), round(pres, 2), round(temper, 2)
 
 
-    def rb1_clicked(self):
-        temp_ind = self.testlist.selectedIndexes()[0].row()
-        self.ResearchsList[temp_ind].table_ind = 0
+    def RB1Clicked(self):
+        temp_ind = self.testList.selectedIndexes()[0].row()
+        self.researchsList[temp_ind].table_ind = 0
         self.graf()
 
 
-    def rb2_clicked(self):
-        temp_ind = self.testlist.selectedIndexes()[0].row()
-        self.ResearchsList[temp_ind].table_ind = 1
+    def RB2Clicked(self):
+        temp_ind = self.testList.selectedIndexes()[0].row()
+        self.researchsList[temp_ind].table_ind = 1
         self.graf()
 
     def keyPressEvent(self, e):
-        if e.key() == QtCore.Qt.Key_Delete and len(self.testlist.selectedIndexes()) > 0 and self.testlist.hasFocus():
-            for i in self.testlist.selectedIndexes()[::-1]:
-                self.listmodel.removeRow(i.row())
-                self.ResearchsList.pop(i.row())
+        if e.key() == QtCore.Qt.Key_Delete and len(self.testList.selectedIndexes()) > 0 and self.testList.hasFocus():
+            for i in self.testList.selectedIndexes()[::-1]:
+                self.listModel.removeRow(i.row())
+                self.researchsList.pop(i.row())
         if e.key() == QtCore.Qt.Key_F10:
             print("ТЫЩЩ")
-            for res in [self.ResearchsList[0]]:
-                print(res.resid)
-                self.insert_research_data_to_DB(res)
-        if e.key() == QtCore.Qt.Key_F9:
-            print("TEST")
-            self.interpretate_researches()
+            for res in self.researchsList:
+                print(res.resID)
+                self.insertResearchDataToDB(res)
 
-    def magic_show(self):
-        self.gifdialog.show()
-        self.movie.start()
+    def magicShow(self):
+        self.gifDialog.show()
+        self.gifDialog.movie.start()
 
-    def interpretate_researches(self):
-        if len(self.ResearchsList) < 1: return
-        Ppl_interval_dict = {}
-        self.magic_show()
-
-        for i, res in enumerate(self.ResearchsList):
-            interval = int(self.testlist.model().item(i, 2).text())
-            Ppl_interval_dict[res] = interval
-        self.thread = GifThread2(self, Ppl_interval_dict,
-                                 joblib.load('rfc_model_pres.pkl'),
-                                 joblib.load('rfc_model_depths.pkl'))
-        self.thread.finish_signal.connect(self.stop_gif2)
+    def interpretateResearches(self):
+        if len(self.researchsList) < 1: return
+        pplIntervalDict = {}
+        self.magicShow()
+        for i, res in enumerate(self.researchsList):
+            interval = int(self.testList.model().item(i, 2).text())
+            pplIntervalDict[res] = interval
+        self.thread = interpretationThread(self, pplIntervalDict)
+        self.thread.finishSignal.connect(self.stopGif)
         self.thread.start()
 
 
-    def stop_gif2(self, newResList):
-        self.movie.stop()
-        self.gifdialog.hide()
+    def stopGif(self, newResList):
+        self.gifDialog.movie.stop()
+        self.gifDialog.hide()
         self.btn4.setDisabled(False)
         self.interpreted = True
-        self.ResearchsList = newResList
-        for i, res in enumerate(self.ResearchsList):
+        self.researchsList = newResList
+        for i, res in enumerate(self.researchsList):
             if res.warning:
-                self.listmodel.item(i, 0).setIcon(self.style().standardIcon(10))
+                self.listModel.item(i, 0).setIcon(self.style().standardIcon(10))
             else:
-                self.listmodel.item(i, 0).setIcon(self.style().standardIcon(45))
+                self.listModel.item(i, 0).setIcon(self.style().standardIcon(45))
 
-
-
-    def insert_research_data_to_DB(self, res):
-        if res.table_models is None: return
-        insert_data_to_sosresearch_table(res)
-        insert_data_to_sosresearchmeasurement_table(res)
-        insert_data_to_sosresearchgraph_table(res)
-        insert_data_to_sosresearchmarkermeasurement_table(res)
-        insert_data_to_sosresearchwell_table(res)
-        insert_data_to_sosresearchvalidation_table(res)
-        insert_data_to_sosresearchlayerinput_table(res)
-        insert_data_to_sosresearchperforation_table(res)
-        insert_data_to_sosresearchresult_table(res)
-        insert_data_to_sosresearchmarkerlayer_table(res)
-
-
-    # def stop_gif(self, dwd, st, td, cd=None):
-    #     self.dots_with_data = dwd
-    #     self.support_times = st
-    #     temp_dfs, central_dots = td, cd
-    #     for i, data in enumerate(self.dots_with_data):
-    #         model_pair = []
-    #         ro_pair = []
-    #         ppl_pair = []
-    #         f_type_pair = []
-    #         checks_pair = []
-    #         for polka in data:
-    #             temp_model, ro, ppl, f_type, checks = self.make_model(polka, i)
-    #             model_pair.append(temp_model)
-    #             ro_pair.append(ro)
-    #             ppl_pair.append(ppl)
-    #             f_type_pair.append(f_type)
-    #             checks_pair.append(checks)
-    #         self.ResearchsList[i].divider_points = cd[i]
-    #         self.ResearchsList[i].table_models = model_pair
-    #         self.ResearchsList[i].checks = checks_pair
-    #         self.ResearchsList[i].sup_times = self.support_times[i]
-    #         self.ResearchsList[i].data_from_sup_times = data
-    #         if f_type_pair[0] == "Water":
-    #             target = 1.16
-    #         else:
-    #             target = 0.88
-    #         cond1 = (max(target, ro_pair[0]) - min(target, ro_pair[0])) / max(target, ro_pair[0])
-    #         cond2 = (max(target, ro_pair[1]) - min(target, ro_pair[1])) / max(target, ro_pair[1])
-    #         if self.ResearchsList[i].checks[0] > self.ResearchsList[i].checks[1]:
-    #             self.ResearchsList[i].table_ind = 0
-    #             self.ResearchsList[i].ro = ro_pair[0]
-    #             self.ResearchsList[i].ppl = ppl_pair[0]
-    #         elif self.ResearchsList[i].checks[0] < self.ResearchsList[i].checks[1]:
-    #             self.ResearchsList[i].table_ind = 1
-    #             self.ResearchsList[i].ro = ro_pair[1]
-    #             self.ResearchsList[i].ppl = ppl_pair[1]
-    #         else:
-    #             if cond1 > cond2:
-    #                 self.ResearchsList[i].table_ind = 0
-    #                 self.ResearchsList[i].ro = ro_pair[0]
-    #                 self.ResearchsList[i].ppl = ppl_pair[0]
-    #             else:
-    #                 self.ResearchsList[i].table_ind = 1
-    #                 self.ResearchsList[i].ro = ro_pair[1]
-    #                 self.ResearchsList[i].ppl = ppl_pair[1]
-    #
-    #         if f_type_pair[0] != f_type_pair[1]:
-    #             self.listmodel.item(i, 0).setIcon(self.style().standardIcon(10))
-    #
-    #     for i, d in enumerate(temp_dfs):
-    #         t1 = d[0].iloc[:, [0, 1, 2]]
-    #         t2 = d[1].iloc[:, [0, 1, 2]]
-    #         if t1.isnull().sum().sum() > 0:
-    #             t1.dropna(inplace=True, how='all')
-    #         if t2.isnull().sum().sum() > 0:
-    #             t2.dropna(inplace=True, how='all')
-    #         pres = pd.concat([t1, t2], axis=0)
-    #         pres.reset_index(inplace=True, drop=True)
-    #         t3 = d[0].iloc[:, [3, 4]]
-    #         t4 = d[1].iloc[:, [3, 4]]
-    #         if t3.isnull().sum().sum() > 0:
-    #             t3.dropna(inplace=True, how='all')
-    #         if t4.isnull().sum().sum() > 0:
-    #             t4.dropna(inplace=True, how='all')
-    #         dep = pd.concat([t3, t4], axis=0)
-    #         dep.reset_index(inplace=True, drop=True)
-    #         temp = pd.concat([pres, dep], axis=1)
-    #         self.ResearchsList[i].final_data = temp
-    #         temp_pw = PlotWidget2()
-    #         self.ResearchsList[i].final_fig = temp_pw.plot(temp, save=True)
-    #     for res in self.ResearchsList:
-    #         res.calc_avg_temp_gradient()
-    #         res.calc_phase_borders()
-    #         res.determine_static_level()
-    #     self.interpreted = True
-    #     self.movie.stop()
-    #     self.gifdialog.hide()
-    #     self.btn4.setDisabled(False)
-    #     print(datetime.datetime.now() - self.now)
-
+    def insertResearchDataToDB(self, res):
+        if res.tableModels is None: return
+        insertDataToSosresearchTable(res)
+        insertDataToSosresearchmeasurementTable(res)
+        insertDataToSosresearchgraphTable(res)
+        insertDataToSosresearchmarkermeasurementTable(res)
+        insertDataToSosresearchwellTable(res)
+        insertDataToSosresearchvalidationTable(res)
+        insertDataToSosresearchlayerinputTable(res)
+        insertDataToSosresearchperforationTable(res)
+        insertDataToSosresearchresultTable(res)
+        insertDataToSosresearchmarkerlayerTable(res)
 
     def graf(self):
-        temp_ind = self.testlist.selectedIndexes()[0].row()
-        print('begin', self.ResearchsList[temp_ind].ro, self.ResearchsList[temp_ind].ppl)
-        layers = self.ResearchsList[temp_ind].layer
+        tempInd = self.testList.selectedIndexes()[0].row()
+        print('begin', self.researchsList[tempInd].ro, self.researchsList[tempInd].ppl)
+        layers = self.researchsList[tempInd].layer
         layers = ', '.join(layers)
-        vdp = self.ResearchsList[temp_ind].vdp
-        elongation = self.ResearchsList[temp_ind].vdp_elong
+        vdp = self.researchsList[tempInd].vdp
+        elongation = self.researchsList[tempInd].vdpElong
         if self.interpreted:
-            if self.ResearchsList[temp_ind].table_ind == 0:
-                self.rb1.setChecked(True)
+            if self.researchsList[tempInd].tableInd == 0:
+                self.RB1.setChecked(True)
             else:
-                self.rb2.setChecked(True)
+                self.RB2.setChecked(True)
             ros = []
             ppls = []
-            self.calctable1.setModel(self.ResearchsList[temp_ind].table_models[0])
-            self.calctable2.setModel(self.ResearchsList[temp_ind].table_models[1])
+            self.calctTable1.setModel(self.researchsList[tempInd].tableModels[0])
+            self.calcTable2.setModel(self.researchsList[tempInd].tableModels[1])
             for i in range(7):
-                self.calctable2.setColumnWidth(i, 75)
-                self.calctable1.setColumnWidth(i, 75)
+                self.calcTable2.setColumnWidth(i, 75)
+                self.calctTable1.setColumnWidth(i, 75)
 
-            checked_sup_times = []
-            for num, m in enumerate(self.ResearchsList[temp_ind].table_models):
-                half_cst = []
-                kt = 0
+            checkedSupportTimes = []
+            for num, m in enumerate(self.researchsList[tempInd].tableModels):
+                halfData = []
+                numDots = 0
                 ro = 0
                 for i in range(1, m.rowCount()):
                     if i == m.rowCount() - 1:
-                        man_abs_depth = float(m.item(i, 0).text()) - float(m.item(i, 1).text())
-                        vdp_abs_depth = self.ResearchsList[temp_ind].vdp - self.ResearchsList[temp_ind].vdp_elong
-                        delta = vdp_abs_depth - man_abs_depth
+                        manAbsDepth = float(m.item(i, 0).text()) - float(m.item(i, 1).text())
+                        vdpAbsDepth = self.researchsList[tempInd].vdp - self.researchsList[tempInd].vdpElong
+                        delta = vdpAbsDepth - manAbsDepth
                     if m.item(i, 6).checkState() == 2:
-                        try:
-                            half_cst.append(self.ResearchsList[temp_ind].timesList[num][i])
-                        except:
-                            half_cst.append(self.support_times[temp_ind][num][i])
+                        halfData.append(self.researchsList[tempInd].timesList[num][i])
                         ro += float(m.item(i, 4).text())
-                        kt += 1
-                ros.append(round(ro / kt, 3))
+                        numDots += 1
+                ros.append(round(ro / numDots, 3))
                 ppls.append(round(float(m.item(m.rowCount() - 1, 2).text()) + delta * ros[-1] / 10, 3))
-                checked_sup_times.append(half_cst)
+                checkedSupportTimes.append(halfData)
 
-            if (self.focusWidget() == self.calctable1 and self.rb1.isChecked()) or \
-                (self.focusWidget() == self.plotWidget2 and self.rb1.isChecked()) or (self.focusWidget() == self.rb1):
-                self.ResearchsList[temp_ind].ro = ros[0]
-                self.ResearchsList[temp_ind].ppl = ppls[0]
-            if self.focusWidget() == self.calctable2 and self.rb2.isChecked() or\
-                (self.focusWidget() == self.plotWidget2 and self.rb2.isChecked()) or (self.focusWidget() == self.rb2):
-                self.ResearchsList[temp_ind].ro = ros[1]
-                self.ResearchsList[temp_ind].ppl = ppls[1]
+            if (self.focusWidget() == self.calctTable1 and self.RB1.isChecked()) or \
+                (self.focusWidget() == self.plotWidget2 and self.RB1.isChecked()) or (self.focusWidget() == self.RB1):
+                self.researchsList[tempInd].ro = ros[0]
+                self.researchsList[tempInd].ppl = ppls[0]
+            if self.focusWidget() == self.calcTable2 and self.RB2.isChecked() or\
+                (self.focusWidget() == self.plotWidget2 and self.RB2.isChecked()) or (self.focusWidget() == self.RB2):
+                self.researchsList[tempInd].ro = ros[1]
+                self.researchsList[tempInd].ppl = ppls[1]
 
-            print(self.ResearchsList[temp_ind].ro, self.ResearchsList[temp_ind].ppl)
-            print(ros, ppls)
-            self.plotWidget.plot(self.ResearchsList[temp_ind].final_data, checked_sup_times)
-            self.reslabel.setText('Данные по скважине' + '\n' +
+            self.plotWidget.plot(self.researchsList[tempInd].finalData, checkedSupportTimes)
+            self.resLabel.setText('Данные по скважине' + '\n' +
                                   'Глубина ВДП - ' + str(vdp) + '\n' +
                                   'Удлинение на ВДП - ' + str(elongation) + '\n' +
                                   'Пласт(ы) - ' + str(layers) + '\n' +
@@ -409,52 +292,52 @@ class MainWindow(QMainWindow):
                                   'Плотность на подъеме - ' + str(ros[1]) + '\n' +
                                   'Пластовое давление на ВДП по спуску - ' + str(ppls[0]) + '\n' +
                                   'Пластовое давление на ВДП по подъему - ' + str(ppls[1]))
-            self.plotWidget2.plot(self.ResearchsList[temp_ind].final_data, checked_sup_times)
-            self.ResearchsList[temp_ind].calc_avg_temp_gradient()
-            self.ResearchsList[temp_ind].calc_phase_borders()
-            self.ResearchsList[temp_ind].determine_static_level()
+            self.plotWidget2.plot(self.researchsList[tempInd].finalData, checkedSupportTimes)
+            self.researchsList[tempInd].calcAvgTempGradient()
+            self.researchsList[tempInd].calcPhaseBorders()
+            self.researchsList[tempInd].determineStaticLevel()
         else:
-            self.plotWidget.plot(self.ResearchsList[temp_ind].data)
-            self.reslabel.setText('Данные по скважине' + '\n' +
+            self.plotWidget.plot(self.researchsList[tempInd].data)
+            self.resLabel.setText('Данные по скважине' + '\n' +
                                   'Глубина ВДП - ' + str(vdp) + '\n' +
                                   'Удлинение на ВДП - ' + str(elongation) + '\n' +
                                   'Пласт(ы) - ' + str(layers) + '\n')
-            self.plotWidget2.plot(self.ResearchsList[temp_ind].data)
+            self.plotWidget2.plot(self.researchsList[tempInd].data)
 
 
     def reports(self):
-
-        fold = r"D:\Interpretator 9000\Else\Reports"
-        for i, res in enumerate(self.ResearchsList):
-
-            filename = str(res.field) + " " + str(res.well_name) + '.pdf'
-            filepath = (pathlib.Path('D:/') / 'Interpretator 9000' / 'Else' / 'Reports' / filename).__str__()
-            cvs = canvas.Canvas(filepath)
-            fig = self.ResearchsList[i].final_fig
+        for i, res in enumerate(self.researchsList):
+            fileName = str(res.field) + " " + str(res.wellName) + '.pdf'
+            filePath = (pathlib.Path('D:/') / 'Interpretator 9000' / 'Else' / 'Reports' / fileName).__str__()
+            cvs = canvas.Canvas(filePath)
+            fig = self.researchsList[i].finalFig
             fig.seek(0)
-            model = self.ResearchsList[i].table_models[self.ResearchsList[i].table_ind]
-            table_data = []
+            model = self.researchsList[i].tableModels[self.researchsList[i].tableInd]
+            tableData = []
             checked = []
             columns = model.columnCount()
             rows = model.rowCount()
             for r in range(rows):
-                row_to_list = []
+                rowToList = []
                 for c in range(columns - 1):
                     if not (r == 0 and (c == 4 or c == 5)):
-                        row_to_list.append(model.item(r, c).text())
+                        rowToList.append(model.item(r, c).text())
                 if r != 0:
                     if model.item(r, 6).checkState() == 2:
                         checked.append(r)
-                table_data.append(row_to_list)
-            well = self.ResearchsList[i].well_name
-            field = self.ResearchsList[i].field
-            layer = ''.join(self.ResearchsList[i].layer)
-            res_date = self.ResearchsList[i].research_date
-            vdp = self.ResearchsList[i].vdp
-            vdp_elongation = self.ResearchsList[i].vdp_elong
-            ro = self.ResearchsList[i].ro
-            ppl = self.ResearchsList[i].ppl
-            pdf(cvs, well, field, layer, res_date, fig, vdp, vdp_elongation, ro, ppl, table_data, checked)
+                tableData.append(rowToList)
+            well = self.researchsList[i].wellName
+            field = self.researchsList[i].field
+            layer = ''.join(self.researchsList[i].layer)
+            researchDate = self.researchsList[i].researchDate
+            vdp = self.researchsList[i].vdp
+            vdpElongation = self.researchsList[i].vdpElong
+            ro = self.researchsList[i].ro
+            ppl = self.researchsList[i].ppl
+            pdf(cvs, well, field, layer, researchDate, fig, vdp, vdpElongation, ro, ppl, tableData, checked)
+            for res in self.researchsList:
+                print(res.resID)
+                self.insertResearchDataToDB(res)
 
     # def make_model(self, data_polka, j):
     #     model = QtGui.QStandardItemModel(len(data_polka), 7)
@@ -558,7 +441,7 @@ class MainWindow(QMainWindow):
     #         self.listmodel.item(j, 0).setIcon(self.style().standardIcon(45))
     #     man_abs_depth = float(model.item(len(data_polka) - 1, 0).text()) - float(
     #         model.item(len(data_polka) - 1, 1).text())
-    #     vdp_abs_depth = self.ResearchsList[j].vdp - self.ResearchsList[j].vdp_elong
+    #     vdp_abs_depth = self.ResearchsList[j].vdp - self.ResearchsList[j].vdpElong
     #     delta = vdp_abs_depth - man_abs_depth
     #     ppl = round(float(model.item(len(data_polka) - 1, 2).text()) + delta * mean(final_ro) / 10, 3)
     #     return model, round(mean(final_ro), 3), ppl, ref_type, len(final_ro)
@@ -573,7 +456,7 @@ class MainWindow(QMainWindow):
     #     self.thread.data = [res.data for res in self.ResearchsList]
     #     self.thread.incl = [res.incl for res in self.ResearchsList]
     #     self.thread.delta = int(self.deltaEdit.text())
-    #     self.thread.finish_signal.connect(self.stop_gif)
+    #     self.thread.finishSignal.connect(self.stop_gif)
     #     self.thread.start()
 
 
@@ -591,7 +474,7 @@ class MainWindow(QMainWindow):
     #         data = pd.read_excel(path).iloc[:, 0:7]
     #         fw = path[path.rfind("/") + 1:path.rfind(".")]
     #         field, well = fw.split(" ")
-    #         exec("res_{}=Ppl(\"{}\", \"{}\", {})".format(i, field, well, "data"))
+    #         exec("res_{}=ppl(\"{}\", \"{}\", {})".format(i, field, well, "data"))
     #         exec("self.ResearchsList.append(res_{})".format(i))
     #         item = QtGui.QStandardItem(fw)
     #         self.listmodel.appendRow(item)
@@ -600,8 +483,133 @@ class MainWindow(QMainWindow):
     #     self.btn3.setDisabled(False)
 
 
+
+    # def stop_gif(self, dwd, st, td, cd=None):
+    #     self.dots_with_data = dwd
+    #     self.support_times = st
+    #     temp_dfs, centralDots = td, cd
+    #     for i, data in enumerate(self.dots_with_data):
+    #         model_pair = []
+    #         ro_pair = []
+    #         ppl_pair = []
+    #         f_type_pair = []
+    #         checks_pair = []
+    #         for polka in data:
+    #             temp_model, ro, ppl, f_type, checks = self.make_model(polka, i)
+    #             model_pair.append(temp_model)
+    #             ro_pair.append(ro)
+    #             ppl_pair.append(ppl)
+    #             f_type_pair.append(f_type)
+    #             checks_pair.append(checks)
+    #         self.ResearchsList[i].dividerPoints = cd[i]
+    #         self.ResearchsList[i].table_models = model_pair
+    #         self.ResearchsList[i].checks = checks_pair
+    #         self.ResearchsList[i].supTimes = self.support_times[i]
+    #         self.ResearchsList[i].dataFromSupTimes = data
+    #         if f_type_pair[0] == "Water":
+    #             target = 1.16
+    #         else:
+    #             target = 0.88
+    #         cond1 = (max(target, ro_pair[0]) - min(target, ro_pair[0])) / max(target, ro_pair[0])
+    #         cond2 = (max(target, ro_pair[1]) - min(target, ro_pair[1])) / max(target, ro_pair[1])
+    #         if self.ResearchsList[i].checks[0] > self.ResearchsList[i].checks[1]:
+    #             self.ResearchsList[i].table_ind = 0
+    #             self.ResearchsList[i].ro = ro_pair[0]
+    #             self.ResearchsList[i].ppl = ppl_pair[0]
+    #         elif self.ResearchsList[i].checks[0] < self.ResearchsList[i].checks[1]:
+    #             self.ResearchsList[i].table_ind = 1
+    #             self.ResearchsList[i].ro = ro_pair[1]
+    #             self.ResearchsList[i].ppl = ppl_pair[1]
+    #         else:
+    #             if cond1 > cond2:
+    #                 self.ResearchsList[i].table_ind = 0
+    #                 self.ResearchsList[i].ro = ro_pair[0]
+    #                 self.ResearchsList[i].ppl = ppl_pair[0]
+    #             else:
+    #                 self.ResearchsList[i].table_ind = 1
+    #                 self.ResearchsList[i].ro = ro_pair[1]
+    #                 self.ResearchsList[i].ppl = ppl_pair[1]
+    #
+    #         if f_type_pair[0] != f_type_pair[1]:
+    #             self.listmodel.item(i, 0).setIcon(self.style().standardIcon(10))
+    #
+    #     for i, d in enumerate(temp_dfs):
+    #         t1 = d[0].iloc[:, [0, 1, 2]]
+    #         t2 = d[1].iloc[:, [0, 1, 2]]
+    #         if t1.isnull().sum().sum() > 0:
+    #             t1.dropna(inplace=True, how='all')
+    #         if t2.isnull().sum().sum() > 0:
+    #             t2.dropna(inplace=True, how='all')
+    #         pres = pd.concat([t1, t2], axis=0)
+    #         pres.reset_index(inplace=True, drop=True)
+    #         t3 = d[0].iloc[:, [3, 4]]
+    #         t4 = d[1].iloc[:, [3, 4]]
+    #         if t3.isnull().sum().sum() > 0:
+    #             t3.dropna(inplace=True, how='all')
+    #         if t4.isnull().sum().sum() > 0:
+    #             t4.dropna(inplace=True, how='all')
+    #         dep = pd.concat([t3, t4], axis=0)
+    #         dep.reset_index(inplace=True, drop=True)
+    #         temp = pd.concat([pres, dep], axis=1)
+    #         self.ResearchsList[i].final_data = temp
+    #         temp_pw = PlotWidget2()
+    #         self.ResearchsList[i].final_fig = temp_pw.plot(temp, save=True)
+    #     for res in self.ResearchsList:
+    #         res.calc_avg_temp_gradient()
+    #         res.calc_phase_borders()
+    #         res.determine_static_level()
+    #     self.interpreted = True
+    #     self.movie.stop()
+    #     self.gifdialog.hide()
+    #     self.btn4.setDisabled(False)
+    #     print(datetime.datetime.now() - self.now)
+
+class gifDialog(QWidget):
+    def __init__(self):
+        super(gifDialog, self).__init__()
+        self.setFixedSize(252, 252)
+        mLabel = QLabel(self)
+        self.movie = QMovie()
+        self.movie.setFileName(os.getcwd() + r"\mgc.gif")
+        mLabel.setMovie(self.movie)
+        mLabel.setFixedSize(252, 252)
+        self.setWindowFlag(QtCore.Qt.FramelessWindowHint)
+
+
+# class gifThread(QtCore.QThread):
+#     def __init__(self, parent=None):
+#         QtCore.QThread.__init__(self, parent)
+#         print("INIT")
+#
+#         self.gifDialog = gifDialog()
+#
+#     def run(self):
+#         print("SHOW1")
+#         self.gifDialog.show()
+#         self.gifDialog.movie.start()
+#         print("SHOW2")
+
+
+class interpretationThread(QtCore.QThread):
+    finishSignal = pyqtSignal(object)
+
+    def __init__(self, parent=None, pplIntervalDict=None):
+        QtCore.QThread.__init__(self, parent)
+        self.pplIntervalDict = pplIntervalDict
+
+
+    def run(self):
+        newResearchList = []
+        self.pModel = joblib.load('rfc_model_pres.pkl')
+        self.dModel = joblib.load('rfc_model_depths.pkl')
+        for res in list(self.pplIntervalDict.keys()):
+            interval = self.pplIntervalDict[res]
+            newResearchList.append(res.interpret(interval, self.pModel, self.dModel))
+        self.finishSignal.emit(newResearchList)
+
+
 # class GifThread(QtCore.QThread):
-#     finish_signal = pyqtSignal(object, object, object, object)
+#     finishSignal = pyqtSignal(object, object, object, object)
 #
 #     def __init__(self, parent=None,incl=None, alt=False, delta = 100):
 #         QtCore.QThread.__init__(self, parent)
@@ -617,23 +625,8 @@ class MainWindow(QMainWindow):
 #             ai = AutoInterpretation(self.data,incl=self.incl)
 #         dwd, st = ai.zips()
 #         td, cd = ai.bias_and_splitting()
-#         self.finish_signal.emit(dwd, st, td, cd)
+#         self.finishSignal.emit(dwd, st, td, cd)
 
-class GifThread2(QtCore.QThread):
-    finish_signal = pyqtSignal(object)
-
-    def __init__(self, parent=None, Ppl_interval_dict=None, pModel=None, dModel=None):
-        QtCore.QThread.__init__(self, parent)
-        self.Ppl_interval_dict = Ppl_interval_dict
-        self.pModel = pModel
-        self.dModel = dModel
-
-    def run(self):
-        newResearchList = []
-        for res in list(self.Ppl_interval_dict.keys()):
-            interval = self.Ppl_interval_dict[res]
-            newResearchList.append(res.interpretate(interval, self.pModel, self.dModel))
-        self.finish_signal.emit(newResearchList)
 
 app = QApplication(sys.argv)
 MW = MainWindow()

@@ -12,7 +12,7 @@ def pdf(cvs, well, field, lay, date, fig, vdp, elong, ro, ppl, data, emited):
         fname = 'font'
         faceName = 'TimesNewRomanPSMT'
         cyrFace = pdfmetrics.EmbeddedType1Face(fname + '.afm', fname + '.pfb')
-        cyrenc = pdfmetrics.Encoding('CP1251')
+        cyrEnc = pdfmetrics.Encoding('CP1251')
         cp1251 = (
             'afii10051', 'afii10052', 'quotesinglbase', 'afii10100', 'quotedblbase',
             'ellipsis', 'dagger', 'daggerdbl', 'Euro', 'perthousand', 'afii10058',
@@ -41,8 +41,8 @@ def pdf(cvs, well, field, lay, date, fig, vdp, elong, ro, ppl, data, emited):
             'afii10094', 'afii10095', 'afii10096', 'afii10097'
         )
         for i in range(128, 256):
-            cyrenc[i] = cp1251[i - 128]
-        pdfmetrics.registerEncoding(cyrenc)
+            cyrEnc[i] = cp1251[i - 128]
+        pdfmetrics.registerEncoding(cyrEnc)
         pdfmetrics.registerTypeFace(cyrFace)
         pdfmetrics.registerFont(pdfmetrics.Font(faceName + '1251', faceName, 'CP1251'))
         c.setFont(faceName + '1251', n)

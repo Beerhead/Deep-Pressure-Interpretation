@@ -9,9 +9,9 @@ from itertools import chain
 
 
 class PlotWidget2(pg.PlotWidget):
-    btn_spusk_pressed_signal = pyqtSignal()
-    btn_podem_pressed_signal = pyqtSignal()
-    line_signal_to_main = pyqtSignal(object, object, object)
+    btnSpuskPressedSignal = pyqtSignal()
+    btnPodemPressedSignal = pyqtSignal()
+    lineSignalToMain = pyqtSignal(object, object, object)
 
     def __init__(self, parent=None):
         super(PlotWidget2, self).__init__(parent)
@@ -30,11 +30,11 @@ class PlotWidget2(pg.PlotWidget):
         self.plotItem.scene().addItem(self.proxy1)
         self.plotItem.scene().addItem(self.proxy2)
 
-        self.button1.clicked.connect(lambda: self.btn_spusk_pressed_signal.emit())
-        self.button2.clicked.connect(lambda: self.btn_podem_pressed_signal.emit())
+        self.button1.clicked.connect(lambda: self.btnSpuskPressedSignal.emit())
+        self.button2.clicked.connect(lambda: self.btnPodemPressedSignal.emit())
 
-    def plot(self, datatoplot, times=None, save=False):
-        datatoplot.to_clipboard()
+    def plot(self, dataToPlot, times=None, save=False):
+        dataToPlot.to_clipboard()
         self.plotItem.clear()
         try:
             self.plotItem.scene().removeItem(self.plot2)
@@ -42,19 +42,19 @@ class PlotWidget2(pg.PlotWidget):
             pass
         self.plotItem.setAxisItems(self.axisItem)
         self.plotItem.getAxis('left').setLabel('Pressure, at., Temperature, °C')
-        X1 = datatoplot.iloc[:, 0]
-        Y1 = datatoplot.iloc[:, 1]
-        Y2 = datatoplot.iloc[:, 2]
-        X2 = datatoplot.iloc[:, 3]
-        Y3 = datatoplot.iloc[:, 4]
-        for g in (X1, Y1, Y2, X2, Y3):
+        x1 = dataToPlot.iloc[:, 0]
+        y1 = dataToPlot.iloc[:, 1]
+        y2 = dataToPlot.iloc[:, 2]
+        x2 = dataToPlot.iloc[:, 3]
+        y3 = dataToPlot.iloc[:, 4]
+        for g in (x1, y1, y2, x2, y3):
             g.dropna(inplace=True)
-        X1 = [i.to_pydatetime().timestamp() for i in X1.to_list()]
-        X2 = [i.to_pydatetime().timestamp() for i in X2.to_list()]
+        x1 = [i.to_pydatetime().timestamp() for i in x1.to_list()]
+        x2 = [i.to_pydatetime().timestamp() for i in x2.to_list()]
         self.plotItem.addLegend()
         self.plotItem.addLegend().clear()
-        self.plotItem.plot(X1, Y1, pen=pg.mkPen('g', width=2), name='Pressure')
-        self.plotItem.plot(X1, Y2, pen=pg.mkPen('r', width=2), name="Temperature")
+        self.plotItem.plot(x1, y1, pen=pg.mkPen('g', width=2), name='Pressure')
+        self.plotItem.plot(x1, y2, pen=pg.mkPen('r', width=2), name="Temperature")
         self.plot2 = pg.ViewBox()
         self.plot2.clear()
         self.plotItem.showAxis('right')
@@ -64,7 +64,7 @@ class PlotWidget2(pg.PlotWidget):
         self.plotItem.getAxis('right').setLabel('Depth, m.')
         self.updateViews()
         self.plotItem.vb.sigResized.connect(self.updateViews)
-        curve3 = pg.PlotDataItem(X2, Y3, name='Depth', pen=pg.mkPen('b', width=2))
+        curve3 = pg.PlotDataItem(x2, y3, name='Depth', pen=pg.mkPen('b', width=2))
         self.plot2.addItem(curve3)
         self.plotItem.addLegend().addItem(curve3, 'Depth')
         self.plotItem.getViewBox().autoRange()
@@ -83,16 +83,16 @@ class PlotWidget2(pg.PlotWidget):
             if times is not None:
                 self.button1.setVisible(True)
                 self.button2.setVisible(True)
-                vlines1, vlines2 = [self.make_inf_line(time, 0) for time in times[0]], \
-                                   [self.make_inf_line(time, 1) for time in times[1]]
-                for line in chain(vlines1, vlines2):
+                vLines1, vLines2 = [self.makeInfLine(time, 0) for time in times[0]], \
+                                   [self.makeInfLine(time, 1) for time in times[1]]
+                for line in chain(vLines1, vLines2):
                     self.plotItem.addItem(line)
-                    line.inf_line_signal.connect(self.emitting_to_main)
+                    line.infLineSignal.connect(self.emittingToMain)
 
-    def emitting_to_main(self, line, start, stop):
-        self.line_signal_to_main.emit(line, start.x(), stop)
+    def emittingToMain(self, line, start, stop):
+        self.lineSignalToMain.emit(line, start.x(), stop)
 
-    def make_inf_line(self, time, polka):
+    def makeInfLine(self, time, polka):
         return PolkaInfLine(pos=time.to_pydatetime().timestamp(), polka=polka)
 
     def updateViews(self):
@@ -101,7 +101,7 @@ class PlotWidget2(pg.PlotWidget):
 
 
 class PolkaInfLine(pg.InfiniteLine):
-    inf_line_signal = pyqtSignal(object, object, object)
+    infLineSignal = pyqtSignal(object, object, object)
 
     def __init__(self, pos, polka, parent=None):
         super(PolkaInfLine, self).__init__(parent)
@@ -111,7 +111,7 @@ class PolkaInfLine(pg.InfiniteLine):
         self.sigPositionChangeFinished.connect(self.emitting)
 
     def emitting(self):
-        self.inf_line_signal.emit(self, self.startPosition, self.getXPos())
+        self.infLineSignal.emit(self, self.startPosition, self.getXPos())
 
 
 class PlotWidget(QWidget):
@@ -122,23 +122,23 @@ class PlotWidget(QWidget):
     def initUi(self):
         self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
-        self.plotlayout = QVBoxLayout(self)
-        self.plotlayout.addWidget(self.canvas)
+        self.plotLayout = QVBoxLayout(self)
+        self.plotLayout.addWidget(self.canvas)
 
-    def plot(self, datatoplot, times=None, save=False):
-        X1 = datatoplot.iloc[:, 0]
-        Y1 = datatoplot.iloc[:, 1]
-        Y2 = datatoplot.iloc[:, 2]
-        X2 = datatoplot.iloc[:, 3]
-        Y3 = datatoplot.iloc[:, 4]
-        for g in (X1, Y1, Y2, X2, Y3):
+    def plot(self, dataToPlot, times=None, save=False):
+        x1 = dataToPlot.iloc[:, 0]
+        y1 = dataToPlot.iloc[:, 1]
+        y2 = dataToPlot.iloc[:, 2]
+        x2 = dataToPlot.iloc[:, 3]
+        y3 = dataToPlot.iloc[:, 4]
+        for g in (x1, y1, y2, x2, y3):
             g.dropna(inplace=True)
         self.figure.clear()
         vis = self.figure.subplots()
-        vis.plot(X1, Y1, "g", label='Pressure')
-        vis.plot(X1, Y2, "r", label='Temperature')
+        vis.plot(x1, y1, "g", label='Pressure')
+        vis.plot(x1, y2, "r", label='Temperature')
         ax2 = vis.axes.twinx()
-        ax2.plot(X2, Y3, label='Depth')
+        ax2.plot(x2, y3, label='Depth')
         self.figure.legend(loc=10, bbox_to_anchor=(0.6, 0.5, 0.5, 0.5))
         vis.set_ylabel('Pressure, at., Temperature, °C')
         ax2.set_ylabel('Depth, m.')
@@ -149,6 +149,6 @@ class PlotWidget(QWidget):
             return fig
         else:
             if times is not None:
-                vis.vlines(times[0], Y1.min(), Y1.max())
-                vis.vlines(times[1], Y1.min(), Y1.max())
+                vis.vlines(times[0], y1.min(), y1.max())
+                vis.vlines(times[1], y1.min(), y1.max())
             self.canvas.draw()
