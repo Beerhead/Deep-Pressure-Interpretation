@@ -29,45 +29,74 @@ class PlotWidget2(pg.PlotWidget):
         self.proxy2.setGeometry(QtCore.QRectF(self.plotItem.geometry().getCoords()[2] - 197, 0, 153, 23))
         self.plotItem.scene().addItem(self.proxy1)
         self.plotItem.scene().addItem(self.proxy2)
-
+        self.plot2 = pg.ViewBox()
         self.button1.clicked.connect(lambda: self.btnSpuskPressedSignal.emit())
         self.button2.clicked.connect(lambda: self.btnPodemPressedSignal.emit())
+        self.sigRangeChanged.connect(self.updatePlot2YRange)
+        self.data = None
+        self.maxYLeft, self.minYLeft = None, None
+        self.minYRight, self.maxYRight = None, None
+
+        self.plotItem.setAxisItems(self.axisItem)
+        self.plotItem.getAxis('left').setLabel('Pressure, at., Temperature, °C')
+        self.plotItem.addLegend()
+        self.plotItem.showAxis('right')
+        self.plotItem.getAxis('right').setLabel('Depth, m.')
+
+
+    def updatePlot2YRange(self, widget, newRange):
+        if self.maxYLeft is None or self.minYLeft is None: return
+        leftInterval = self.maxYLeft - self.minYLeft
+        rightInterval = self.maxYRight - self.minYRight
+        currentMinYLeft, currentMaxYLeft = newRange[1][0], newRange[1][1]
+        newMinYRight = currentMinYLeft/leftInterval * rightInterval + self.minYRight
+        newMaxYRight = currentMaxYLeft/leftInterval * rightInterval + self.minYRight
+        self.plot2.setYRange(newMinYRight, newMaxYRight)
+
+
 
     def plot(self, dataToPlot, times=None, save=False):
-        dataToPlot.to_clipboard()
+        if not dataToPlot.equals(self.data):
+            self.minYLeft, self.maxYLeft, self.minYRight, self.maxYRight = None, None, None, None
+        self.data = dataToPlot
+        self.data.to_clipboard()
         self.plotItem.clear()
         try:
             self.plotItem.scene().removeItem(self.plot2)
         except AttributeError:
             pass
-        self.plotItem.setAxisItems(self.axisItem)
-        self.plotItem.getAxis('left').setLabel('Pressure, at., Temperature, °C')
-        x1 = dataToPlot.iloc[:, 0]
-        y1 = dataToPlot.iloc[:, 1]
-        y2 = dataToPlot.iloc[:, 2]
-        x2 = dataToPlot.iloc[:, 3]
-        y3 = dataToPlot.iloc[:, 4]
+
+        x1 = self.data.iloc[:, 0]
+        y1 = self.data.iloc[:, 1]
+        y2 = self.data.iloc[:, 2]
+        x2 = self.data.iloc[:, 3]
+        y3 = self.data.iloc[:, 4]
+
+        #print(max(y1.max(), y2.max()), y3.max())
+        #print(min(y1.min(), y2.min()), y3.min())
         for g in (x1, y1, y2, x2, y3):
             g.dropna(inplace=True)
         x1 = [i.to_pydatetime().timestamp() for i in x1.to_list()]
         x2 = [i.to_pydatetime().timestamp() for i in x2.to_list()]
-        self.plotItem.addLegend()
         self.plotItem.addLegend().clear()
-        self.plotItem.plot(x1, y1, pen=pg.mkPen('g', width=2), name='Pressure')
-        self.plotItem.plot(x1, y2, pen=pg.mkPen('r', width=2), name="Temperature")
-        self.plot2 = pg.ViewBox()
+        self.plotItem.plot(x1, y1, pen=pg.mkPen('g', width=3), name='Pressure')
+        self.plotItem.plot(x1, y2, pen=pg.mkPen('r', width=3), name="Temperature")
         self.plot2.clear()
-        self.plotItem.showAxis('right')
         self.plotItem.scene().addItem(self.plot2)
         self.plotItem.getAxis('right').linkToView(self.plot2)
         self.plot2.setXLink(self.plotItem)
-        self.plotItem.getAxis('right').setLabel('Depth, m.')
         self.updateViews()
         self.plotItem.vb.sigResized.connect(self.updateViews)
-        curve3 = pg.PlotDataItem(x2, y3, name='Depth', pen=pg.mkPen('b', width=2))
+        curve3 = pg.PlotDataItem(x2, y3, name='Depth', pen=pg.mkPen('b', width=3))
         self.plot2.addItem(curve3)
         self.plotItem.addLegend().addItem(curve3, 'Depth')
         self.plotItem.getViewBox().autoRange()
+        self.plot2.autoRange()
+        if (self.minYLeft, self.maxYLeft, self.minYRight, self.maxYRight) == (None, None, None, None):
+            range = self.plotItem.getViewBox().viewRange()[1]
+            self.minYLeft, self.maxYLeft = range[0], range[1]
+            range = self.plot2.viewRange()[1]
+            self.minYRight, self.maxYRight = range[0], range[1]
 
         if save:
             exporter = ImageExporter(self.plotItem)

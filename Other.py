@@ -20,11 +20,11 @@ class MeasurementsWidget(QWidget):
     def __init__(self, parent):
         super(MeasurementsWidget, self).__init__()
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
-        self.initUi()
-        self.connectUi()
+        self.initUI()
+        self.connectUI()
         self.parent = parent
 
-    def initUi(self):
+    def initUI(self):
         self.setWindowTitle("Выбор замеров")
         self.HL = QHBoxLayout(self)
         self.measureListView = QListView()
@@ -35,12 +35,12 @@ class MeasurementsWidget(QWidget):
         self.toAnalysisBtn = QPushButton('Добавить в анализ выбранное')
         self.startDate = QDateEdit()
         self.startDate.setCalendarPopup(True)
-        #self.startDate.setDate(QDate.currentDate().addDays(-1))
-        self.startDate.setDate(QDate(2021, 6, 15))
+        self.startDate.setDate(QDate.currentDate().addDays(-1))
+        #self.startDate.setDate(QDate(2021, 6, 15))
         self.endDate = QDateEdit()
         self.endDate.setCalendarPopup(True)
-        #self.endDate.setDate(QDate.currentDate())
-        self.endDate.setDate(QDate(2021, 6, 16))
+        self.endDate.setDate(QDate.currentDate())
+        #self.endDate.setDate(QDate(2021, 6, 16))
         self.fieldCombobox = QComboBox()
         self.fieldCombobox.addItems(self.getFieldNames())
         self.wellCombobox = QComboBox()
@@ -75,7 +75,7 @@ class MeasurementsWidget(QWidget):
         self.measureListView.setMaximumWidth(300)
         self.chosenMeasureListView.setMaximumWidth(300)
 
-    def connectUi(self):
+    def connectUI(self):
         self.searchBtn.clicked.connect(self.searchForMeasurementsFromDB)
         self.addBtn.clicked.connect(
             lambda: self.throwMeasurementBetweenLists(self.measureListView, self.chosenMeasureListView,
@@ -226,6 +226,7 @@ class MeasurementsWidget(QWidget):
                         pressure = pd.Series(np.frombuffer(pressureBLOB[3:], dtype=np.dtype('f')))
 
                     pressure.dropna(inplace=True, how='all')
+                    pressure.reset_index(inplace=True, drop=True)
                     if row[4] is not None:  # Температура
                         temperatureBLOB = row[4].read()
                         if temperatureBLOB[2] == 1:
@@ -239,11 +240,13 @@ class MeasurementsWidget(QWidget):
                         temperature = pd.Series((None for i in range(pressure.size)))
 
                     temperature.dropna(inplace=True, how='all')
+                    temperature.reset_index(inplace=True, drop=True)
+
                     depthBLOB = row[9].read()  # Глубина
                     bytesLen = int.from_bytes(depthBLOB[3:7], byteorder=byteorder)
                     depth = pd.Series(np.frombuffer(pylzma.decompress(depthBLOB[7:],
                                                                       maxlength=bytesLen), dtype=np.dtype('f')))
-
+                    depth.reset_index(inplace=True, drop=True)
                     if row[1] is not None:  # Даты манометра
                         mtStartDateTime = pd.to_datetime(row[10], dayfirst=True)
                         BD_mt_delta = row[1]
@@ -259,7 +262,7 @@ class MeasurementsWidget(QWidget):
                         mtDates.reset_index(inplace=True, drop=True)
                         mtDates = mtDates.apply(lambda x: x + pd.Timedelta(hours=time.hour, minutes=time.minute,
                                                                            seconds=time.second))
-
+                    mtDates.reset_index(inplace=True, drop=True)
                     if row[8] is not None:  # даты глубин
                         dateDepthBLOB = row[8].read()
                         bytesLen = int.from_bytes(dateDepthBLOB[3:7], byteorder=byteorder)
@@ -270,8 +273,14 @@ class MeasurementsWidget(QWidget):
                         dpStartDateTime = pd.to_datetime(row[6], dayfirst=True)
                         mtTimeDelta = pd.Timedelta(minutes=row[7].minute, seconds=row[7].second)
                         datesDepth = pd.Series((dpStartDateTime + mtTimeDelta * i for i in range(len(depth))))
-
-                    data = pd.concat([mtDates, pressure, temperature, datesDepth, depth], axis=1)
+                    datesDepth.reset_index(inplace=True, drop=True)
+                    mtData = pd.concat([mtDates, pressure, temperature], axis=1, ignore_index=True)
+                    datesDepth = datesDepth.rename_axis(3)
+                    depth = depth.rename_axis(4)
+                    spsData = pd.concat([datesDepth, depth], axis=1, ignore_index=True)
+                    mtData.dropna(inplace=True)
+                    spsData.dropna(inplace=True)
+                    data = pd.concat([mtData, spsData], axis=1, ignore_index=True, keys=[0,1,2,3,4])
                     ppl = Interpretation.PplFabric(fieldName, wellName, data)
                     ppl.otsWellID = row[0]
                     ppl.otsMesID = row[11]
@@ -329,6 +338,13 @@ class MeasurementsWidget(QWidget):
             rows = cursor.fetchone()
         return wName, rows[0]
 
+class IntDelegate(QStyledItemDelegate):
+
+    def createEditor(self, parent, option, index):
+        lineEdit = QLineEdit(parent)
+        validator = QIntValidator(10, 1000, lineEdit)
+        lineEdit.setValidator(validator)
+        return lineEdit
 
 def insertDataToSosresearchTable(ppl):
     if ppl.tableModels is None:return
@@ -879,6 +895,7 @@ def to300Points(sample):
 
 
 def searchAndInterpolate(searchingArray, x, interpolate=True):
+
     if searchingArray.iloc[-1, 0] < searchingArray.iloc[0, 0]:
         searchingArray = searchingArray.iloc[::-1]
         searchingArray.reset_index(inplace=True, drop=True)
@@ -900,10 +917,3 @@ def searchAndInterpolate(searchingArray, x, interpolate=True):
         else:
             return column2.iloc[left]
 
-class IntDelegate(QStyledItemDelegate):
-
-    def createEditor(self, parent, option, index):
-        lineEdit = QLineEdit(parent)
-        validator = QIntValidator(10, 1000, lineEdit)
-        lineEdit.setValidator(validator)
-        return lineEdit
