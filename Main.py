@@ -25,7 +25,8 @@ class MainWindow(QMainWindow):
 
     def initUI(self):
         self.testList = QTableView()
-        self.testList.setFixedWidth(400)
+        self.testList.setFixedWidth(450)
+        self.testList.rowHeight(25)
         self.centralWidget = QWidget(self)
         self.HL = QHBoxLayout(self.centralWidget)  # основной горизонтальный лэйаут
         self.VL1 = QVBoxLayout()  # вертикал лэй №1
@@ -56,15 +57,14 @@ class MainWindow(QMainWindow):
         self.deltaEdit.setAlignment(Qt.AlignCenter)
         self.deltaEdit.setMaximumWidth(60)
         self.deltaEdit.setValidator(QIntValidator(1, 1000))
-        self.labelChBoxLay.addLayout(self.chBoxLay)
         self.labelChBoxLay.addWidget(self.resLabel)
+        self.labelChBoxLay.addLayout(self.chBoxLay)
         self.labelChBoxLay.setAlignment(Qt.AlignCenter)
         self.HLTables.addLayout(self.labelChBoxLay)
         self.GL = QGridLayout()  # лэй для кнопок
-        self.btn1 = QPushButton('Открыть файлы')
+        self.btn1 = QPushButton('Интерпретация 1')
         self.btn2 = QPushButton('Замеры ОТС')
-        self.btn3 = QPushButton('Интерпретация')
-        self.btn3.setDisabled(True)
+        self.btn3 = QPushButton('Интерпретация 2')
         self.btn4 = QPushButton('Выгрузить отчеты')
         self.btn4.setDisabled(True)
         self.GL.addWidget(self.btn1, 1, 1)
@@ -87,8 +87,9 @@ class MainWindow(QMainWindow):
 
     def connectUI(self):
 
+        self.btn1.clicked.connect(lambda: self.interpretateResearches(method=1))
         self.btn2.clicked.connect(lambda: self.measureWidget.show())
-        self.btn3.clicked.connect(self.interpretateResearches)
+        self.btn3.clicked.connect(lambda: self.interpretateResearches(method=2))
         self.btn4.clicked.connect(self.reports)
         self.testList.clicked.connect(self.graf)
         self.calcTable1.clicked.connect(self.graf)
@@ -178,14 +179,14 @@ class MainWindow(QMainWindow):
 
 
     def RB1Clicked(self):
-        temp_ind = self.testList.selectedIndexes()[0].row()
-        self.researchsList[temp_ind].table_ind = 0
+        tempInd = self.testList.selectedIndexes()[0].row()
+        self.researchsList[tempInd].tableInd = 0
         self.graf()
 
 
     def RB2Clicked(self):
-        temp_ind = self.testList.selectedIndexes()[0].row()
-        self.researchsList[temp_ind].table_ind = 1
+        tempInd = self.testList.selectedIndexes()[0].row()
+        self.researchsList[tempInd].tableInd = 1
         self.graf()
 
     def keyPressEvent(self, e):
@@ -198,19 +199,26 @@ class MainWindow(QMainWindow):
             for res in self.researchsList:
                 print(res.resID)
                 self.insertResearchDataToDB(res)
+        if e.key() == QtCore.Qt.Key_F9:
+            print("ТЫЩЩ")
+            for res in self.researchsList:
+                print(res.wellName)
+
 
     def magicShow(self):
         self.gifDialog.show()
         self.gifDialog.movie.start()
 
-    def interpretateResearches(self):
+    def interpretateResearches(self, method):
         if len(self.researchsList) < 1: return
+        self.now = datetime.datetime.now()
         pplIntervalDict = {}
         self.magicShow()
         for i, res in enumerate(self.researchsList):
+            res.warning = False
             interval = int(self.testList.model().item(i, 2).text())
             pplIntervalDict[res] = interval
-        self.thread = InterpretationThread(self, pplIntervalDict)
+        self.thread = InterpretationThread(self, pplIntervalDict, method=method)
         self.thread.finishSignal.connect(self.stopGif)
         self.thread.start()
 
@@ -227,6 +235,9 @@ class MainWindow(QMainWindow):
                 self.listModel.item(i, 0).setIcon(self.style().standardIcon(10))
             else:
                 self.listModel.item(i, 0).setIcon(self.style().standardIcon(45))
+                if res.interpreted:
+                    self.listModel.item(i, 3).setCheckState(2)
+        print(datetime.datetime.now() - self.now)
 
 
     def insertResearchDataToDB(self, res):
@@ -248,7 +259,7 @@ class MainWindow(QMainWindow):
         layers = ', '.join(layers)
         vdp = self.researchsList[tempInd].vdp
         elongation = self.researchsList[tempInd].vdpElong
-        if self.interpreted:
+        if self.researchsList[tempInd].interpreted:
             if self.researchsList[tempInd].tableInd == 0:
                 self.RB1.setChecked(True)
             else:
@@ -311,7 +322,10 @@ class MainWindow(QMainWindow):
 
 
     def reports(self):
+        toDeleteList=[]
         for i, res in enumerate(self.researchsList):
+            if not res.interpreted or self.listModel.item(i,3).checkState() != 2: continue
+            self.insertResearchDataToDB(res)
             fileName = str(res.field) + " " + str(res.wellName) + '.pdf'
             filePath = (pathlib.Path('D:/') / 'Interpretator 9000' / 'Else' / 'Reports' / fileName).__str__()
             cvs = canvas.Canvas(filePath)
@@ -340,9 +354,10 @@ class MainWindow(QMainWindow):
             ro = self.researchsList[i].ro
             ppl = self.researchsList[i].ppl
             pdf(cvs, well, field, layer, researchDate, fig, vdp, vdpElongation, ro, ppl, tableData, checked)
-            for res in self.researchsList:
-                print(res.resID)
-                self.insertResearchDataToDB(res)
+            toDeleteList.append(i)
+        for i in toDeleteList[::-1]:
+            self.listModel.removeRow(i)
+            self.researchsList.pop(i)
 
 
 class GifDialog(QWidget):
@@ -361,22 +376,26 @@ class GifDialog(QWidget):
 class InterpretationThread(QtCore.QThread):
     finishSignal = pyqtSignal(object)
 
-    def __init__(self, parent=None, pplIntervalDict=None, withML=True):
+    def __init__(self, parent=None, pplIntervalDict=None, withML=True, method=1):
         QtCore.QThread.__init__(self, parent)
         self.pplIntervalDict = pplIntervalDict
         self.ML = withML
+        self.method = method
+        self.pModel = None
+        self.dModel = None
 
     def run(self):
         newResearchList = []
         if self.ML:
             self.pModel = joblib.load('rfc_model_pres.pkl')
             self.dModel = joblib.load('rfc_model_depths.pkl')
-        else:
-            self.pModel = None
-            self.dModel = None
         for res in list(self.pplIntervalDict.keys()):
             interval = self.pplIntervalDict[res]
-            newResearchList.append(res.interpret(interval, self.pModel, self.dModel))
+            try:
+                newResearchList.append(res.interpret(interval, self.pModel, self.dModel, self.method))
+            except:
+                newResearchList.append(res)
+                res.setWarning()
         self.finishSignal.emit(newResearchList)
 
     def end(self):

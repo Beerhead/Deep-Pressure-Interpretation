@@ -80,7 +80,7 @@ dict_suborg = {i: d for i, d in zip(index, d)}
 
 class Ppl:
 
-    def __init__(self, field, wname, data, new=False):
+    def __init__(self, field, wname, data):
         self.field = field
         self.wellName = wname
         self.data = data
@@ -117,8 +117,10 @@ class Ppl:
         self.otsResearchMarkerLayer = {}
         self.centralDots = []
         self.warning = False
-        if not new:
-            self.getWellParamsOld()
+        self.interpreted = False
+
+    def setWarning(self):
+        self.warning = True
 
     def makeDepthPressureTemperatureData(self):
         if self.finalData is None: return
@@ -218,14 +220,20 @@ class Ppl:
                     np.frombuffer(pylzma.decompress(rows[0].read()[7:], maxlength=bytesLen), dtype=np.dtype('f')))
                 if len(depth) == 0: raise
             except:
-                depth = pd.Series(np.frombuffer(rows[0].read()[3:], dtype=np.dtype('f')))
+                try:
+                    depth = pd.Series(np.frombuffer(rows[0].read()[3:], dtype=np.dtype('f')))
+                except:
+                    depth = pd.Series([0., 0.])
             try:
                 bytesLen = int.from_bytes(rows[1].read()[3:7], byteorder=byteorder)
                 elong = pd.Series(
                     np.frombuffer(pylzma.decompress(rows[1].read()[7:], maxlength=bytesLen), dtype=np.dtype('f')))
                 if len(elong) == 0: raise
             except:
-                elong = pd.Series(np.frombuffer(rows[1].read()[3:], dtype=np.dtype('f')))
+                try:
+                    elong = pd.Series(np.frombuffer(rows[1].read()[3:], dtype=np.dtype('f')))
+                except:
+                    elong = pd.Series([0., 0.])
 
             self.incl = pd.concat([depth, elong], axis=1)
             self.vdpElong = round(Other.searchAndInterpolate(self.incl, self.vdp), 2)
@@ -239,12 +247,13 @@ class Ppl:
             self.maxDepth = self.data.iloc[:, 4].max()
 
 
-    def interpret(self, delta, pModel=None, dModel=None):
+    def interpret(self, delta, pModel=None, dModel=None, method=1):
         transformedData = self.transformData()
-        oneZeroIndexes = self.divideEtImpera(transformedData, pModel, dModel)
+        oneZeroIndexes = self.divideEtImpera(transformedData, pModel, dModel, method)
         offsetSplittedData = self.OffsetAndSplitting(oneZeroIndexes)
         dataList, self.timesList = self.makeDataForModels(offsetSplittedData, delta)
         self.finalCalc(dataList, self.timesList, offsetSplittedData)
+        self.interpreted = True
         return self
 
     def transformData(self):
@@ -293,7 +302,7 @@ class Ppl:
         prescaledSample = pd.concat([ext1, ext2, ext3, ext4, ext5, ext6], axis=1)
         return prescaledSample
 
-    def divideEtImpera(self, receivedData, pModel=None, dModel=None):
+    def divideEtImpera(self, receivedData, pModel=None, dModel=None, method=1):
         def calcATan(i, numDots, data):
             t0 = int(i - numDots) + 1
             t2 = int(i + numDots)
@@ -315,7 +324,6 @@ class Ppl:
             return round(np.arctan(tan), 5)
 
         data = receivedData
-
         numPressureDots = data.iloc[:, 0].count()
         numDepthDots = data.iloc[:, 3].count()
         presData = data.iloc[:numPressureDots, 0:3]
@@ -332,85 +340,121 @@ class Ppl:
             scalerDepth.fit(depthData)
             pipelinePressure = Pipeline([
                 ("scaler", scalerPressure),
-                ("etc", pModel)
-            ])
+                ("etc", pModel)])
             pipelineDepth = Pipeline([
                 ("scaler", scalerDepth),
-                ("etc", dModel)
-            ])
-            presPredict = pipelinePressure.predict(presData)
-            depthPredict = pipelineDepth.predict(depthData)
-            presPredict = presPredict.tolist().count(2) / 2
-            depthPredict = depthPredict.tolist().count(2) / 2
-            numStopDotsPressure = max(min(presPredict, 30), 4)
-            numStopDotsDepth = max(min(depthPredict, 30), 4)
+                ("etc", dModel)])
+            presPredict = pipelinePressure.predict(presData).tolist()
+            depthPredict = pipelineDepth.predict(depthData).tolist()
+            presPredictCount = presPredict.count(2) / 2
+            depthPredictCount = depthPredict.count(2) / 2
+            numStopDotsPressure = max(min(presPredictCount, 30), 4)
+            numStopDotsDepth = max(min(depthPredictCount, 30), 4)
 
         finalIndexes = [None, None, None, None]
+        if method == 1:
+            # pressures
+            presDataNoDerivative = presData.iloc[:, [0, 2]]
+            presDataNoDerivative.iloc[:, 0] = presDataNoDerivative.iloc[:,
+                                            0].apply(lambda x: x * 24 * 60 - presDataNoDerivative.iloc[:, 0].min())
+            srez = presDataNoDerivative.iloc[:, 1]
+            maxPres = srez.max()
+            ind98 = []
+            for i in range(srez.count()):
+                if srez[i] > maxPres * 0.98 and len(ind98) == 0:
+                    ind98.append(i)
+                if srez[i] < maxPres * 0.98 and len(ind98) == 1:
+                    ind98.append(i)
 
-        # pressures
-        presDataNoDerivative = presData.iloc[:, [0, 2]]
-        presDataNoDerivative.iloc[:, 0] = presDataNoDerivative.iloc[:,
-                                        0].apply(lambda x: x * 24 * 60 - presDataNoDerivative.iloc[:, 0].min())
-        srez = presDataNoDerivative.iloc[:, 1]
-        maxPres = srez.max()
-        ind98 = []
-        for i in range(srez.count()):
-            if srez[i] > maxPres * 0.98 and len(ind98) == 0:
-                ind98.append(i)
-            if srez[i] < maxPres * 0.98 and len(ind98) == 1:
-                ind98.append(i)
+            min_feature = 0
+            for i in range(ind98[0], int((ind98[0] + ind98[1]) / 2)):
+                atan = calcATan(i, numStopDotsPressure, presDataNoDerivative)
+                if atan > min_feature:
+                    min_feature = atan
+                    finalIndexes[0] = i
 
-        min_feature = 0
-        for i in range(ind98[0], int((ind98[0] + ind98[1]) / 2)):
-            atan = calcATan(i, numStopDotsPressure, presDataNoDerivative)
-            if atan > min_feature:
-                min_feature = atan
-                finalIndexes[0] = i
+            min_feature = 0
+            for i in range(int((ind98[0] + ind98[1]) / 2), ind98[1]):
+                atan = calcATan(i, numStopDotsPressure, presDataNoDerivative)
+                if atan > min_feature:
+                    min_feature = atan
+                    finalIndexes[1] = i
 
-        min_feature = 0
-        for i in range(int((ind98[0] + ind98[1]) / 2), ind98[1]):
-            atan = calcATan(i, numStopDotsPressure, presDataNoDerivative)
-            if atan > min_feature:
-                min_feature = atan
-                finalIndexes[1] = i
+            # depths
+            depthDataNoDeriv = depthData.iloc[:, [0, 2]]
+            depthDataNoDeriv.iloc[:, 0] = depthDataNoDeriv.iloc[:, 0].apply(lambda x:
+                                                                            x * 24 * 60 - depthDataNoDeriv.iloc[
+                                                                                                :,
+                                                                                                0].min())
 
-        # depths
-        depthDataNoDeriv = depthData.iloc[:, [0, 2]]
-        depthDataNoDeriv.iloc[:, 0] = depthDataNoDeriv.iloc[:, 0].apply(lambda x:
-                                                                        x * 24 * 60 - depthDataNoDeriv.iloc[
-                                                                                            :,
-                                                                                            0].min())
+            srez = depthDataNoDeriv.iloc[:, 1]
+            maxDepth = srez.max()
+            ind98 = []
+            for i in range(srez.count()):
+                if srez[i] > maxDepth * 0.98 and len(ind98) == 0:
+                    ind98.append(i)
+                if srez[i] < maxDepth * 0.98 and len(ind98) == 1:
+                    ind98.append(i)
+            min_feature = 0
 
-        srez = depthDataNoDeriv.iloc[:, 1]
-        maxDepth = srez.max()
-        ind98 = []
-        for i in range(srez.count()):
-            if srez[i] > maxDepth * 0.98 and len(ind98) == 0:
-                ind98.append(i)
-            if srez[i] < maxDepth * 0.98 and len(ind98) == 1:
-                ind98.append(i)
-        min_feature = 0
+            for i in range(ind98[0], int((ind98[0] + ind98[1]) / 2)):
+                atan = calcATan(i, numStopDotsDepth, depthDataNoDeriv)
+                if atan > min_feature:
+                    min_feature = atan
+                    finalIndexes[2] = i
 
-        for i in range(ind98[0], int((ind98[0] + ind98[1]) / 2)):
-            atan = calcATan(i, numStopDotsDepth, depthDataNoDeriv)
-            if atan > min_feature:
-                min_feature = atan
-                finalIndexes[2] = i
+            min_feature = 0
 
-        min_feature = 0
+            for i in range(int((ind98[0] + ind98[1]) / 2), ind98[1]):
+                atan = calcATan(i, numStopDotsDepth, depthDataNoDeriv)
+                if atan > min_feature:
+                    min_feature = atan
+                    finalIndexes[3] = i
+        elif method == 2:
+            # по давлениям
+            sumOf2 = 0
+            indexesOf2 = []
+            localIndexes = []
+            sums = []
+            for i in range(0, len(presPredict) - 1):
+                if presPredict[i] == 2 and presPredict[i + 1] == 2:
+                    sumOf2 += 1
+                    localIndexes.append(i)
+                elif presPredict[i] == 2 and presPredict[i + 1] != 2:
+                    sums.append(sumOf2)
+                    sumOf2 = 0
+                    indexesOf2.append(localIndexes)
+                    localIndexes = []
+            seekedSequence = sums.index(max(sums))
+            presFirstSeekedIndex, presSecondSeekedIndex = indexesOf2[seekedSequence][0], indexesOf2[seekedSequence][-1]
+            finalIndexes[0] = presFirstSeekedIndex
+            finalIndexes[1] = presSecondSeekedIndex + 1
 
-        for i in range(int((ind98[0] + ind98[1]) / 2), ind98[1]):
-            atan = calcATan(i, numStopDotsDepth, depthDataNoDeriv)
-            if atan > min_feature:
-                min_feature = atan
-                finalIndexes[3] = i
+            # по глубинам
+            sumOf2 = 0
+            indexesOf2 = []
+            localIndexes = []
+            sums = []
+            for i in range(0, len(depthPredict) - 1):
+                if depthPredict[i] == 2 and depthPredict[i + 1] == 2:
+                    sumOf2 += 1
+                    localIndexes.append(i)
+                elif depthPredict[i] == 2 and depthPredict[i + 1] != 2:
+                    sums.append(sumOf2)
+                    sumOf2 = 0
+                    indexesOf2.append(localIndexes)
+                    localIndexes = []
+            seekedSequence = sums.index(max(sums))
+            depthFirstSeekedIndex, depthSecondSeekedIndex = indexesOf2[seekedSequence][0], indexesOf2[seekedSequence][-1]
+            finalIndexes[2] = depthFirstSeekedIndex
+            finalIndexes[3] = depthSecondSeekedIndex + 1
         return finalIndexes
 
     def OffsetAndSplitting(self, receivedIndexes):
         ind = receivedIndexes
-        self.centralDots = [(ind[0] + ind[1]) / 2, (ind[2] + ind[3]) / 2]
         delimeterPressure = int((ind[0] + ind[1]) / 2)
         delimeterDepth = int((ind[2] + ind[3]) / 2)
+        self.centralDots = [delimeterPressure, delimeterDepth]
         dt1 = self.data.iloc[ind[0], 0] - self.data.iloc[ind[2], 3]
         dt2 = self.data.iloc[ind[1], 0] - self.data.iloc[ind[3], 3]
         offsetData1 = self.data.copy()
@@ -663,9 +707,11 @@ class Ppl:
         if refType == "Water":
             target = 1.16
             calcList = [ro for ro in calcList if ro >= 0.98]
-        else:
+        elif refType == "Oil":
             target = 0.88
             calcList = [ro for ro in calcList if 0.7 < ro < 0.98]
+
+
         if len(calcList) % 2 == 0:
             medianRo2 = median(calcList)
             indicator = False
@@ -705,7 +751,7 @@ class Ppl:
         return model, round(mean(finalRo), 3), ppl, refType, len(finalRo)
 
 def PplFabric(field, wname, data):
-    return Ppl(field, wname, data, True)
+    return Ppl(field, wname, data)
 
 def calcBorders(typeList, depthShelfs):
     def disintegrateAbortions(typeList):

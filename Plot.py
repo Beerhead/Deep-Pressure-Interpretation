@@ -91,13 +91,17 @@ class PlotWidget2(pg.PlotWidget):
         self.plot2.addItem(curve3)
         self.plotItem.addLegend().addItem(curve3, 'Depth')
         self.plotItem.getViewBox().autoRange()
+        range = self.plotItem.getViewBox().viewRange()[0]
+        minXFirstLeft, maxXFirstLeft = range[0], range[1]
         self.plot2.autoRange()
+        range = self.plot2.viewRange()[0]
+        minXFirstRight, maxXFirstRight = range[0], range[1]
+        self.plot2.setXRange(min(minXFirstRight, minXFirstLeft), max(maxXFirstRight, maxXFirstLeft))
         if (self.minYLeft, self.maxYLeft, self.minYRight, self.maxYRight) == (None, None, None, None):
             range = self.plotItem.getViewBox().viewRange()[1]
             self.minYLeft, self.maxYLeft = range[0], range[1]
             range = self.plot2.viewRange()[1]
             self.minYRight, self.maxYRight = range[0], range[1]
-
         if save:
             exporter = ImageExporter(self.plotItem)
             exporter.parameters()['width'] = 580

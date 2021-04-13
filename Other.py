@@ -97,8 +97,8 @@ class MeasurementsWidget(QWidget):
 
     def makeModelToReturnToMain(self):
         model = self.chosenMeasureListView.model()
-        newModel = QtGui.QStandardItemModel(len(self.Ppllist), 3)
-        newModel.setHorizontalHeaderLabels(['Площадь', 'Скважина', 'Интервал'])
+        newModel = QtGui.QStandardItemModel(len(self.Ppllist), 4)
+        newModel.setHorizontalHeaderLabels(['Площадь', 'Скважина', 'Интервал', 'В отчет/БД'])
         for i in range(model.rowCount()):
             square, wellNum = model.item(i, 0).text().split(" ")
             lastDigit = int(str(int(self.Ppllist[i].maxDepth / 50))[-1])
@@ -118,6 +118,12 @@ class MeasurementsWidget(QWidget):
             item.setText(str(interval))
             item.setEditable(True)
             newModel.setItem(i, 2, QStandardItem(item))
+
+            item.setText('')
+            item.setEditable(False)
+            item.setCheckable(True)
+            newModel.setItem(i, 3, QStandardItem(item))
+
         return newModel
 
     def drawGraph(self, listID):
@@ -198,7 +204,8 @@ class MeasurementsWidget(QWidget):
                         WHERE (ots_bn.sosmeasurement.mesoriginalid IS NULL) and
                               (ots_bn.sosmeasurement.messtartdate >= :startDate) and
                               (ots_bn.sosmeasurement.messtartdate <= :endDate) and
-                              (ots_bn.sosmeasurement.mesdeviceid != 'SP2UXDfKjUuyuV/EDzyNEA')'''
+                              (ots_bn.sosmeasurement.mesdeviceid != 'SP2UXDfKjUuyuV/EDzyNEA')
+                              '''
             if self.fieldCombobox.currentIndex() != 0:
                 if self.wellCombobox.currentIndex() != 0:
                     sql_Q += 'and (ots_bn.sosmeasurement.meswellid = :wellid)'
@@ -767,7 +774,10 @@ def insertDataToSosresearchperforationTable(ppl):
                                 WHERE (ots_bn.sosbed.bedID = :bedID)'''
                     cursor.execute(sqlQ, bedid=bedID)
                     vnk = cursor.fetchone()[0]
-                    pvnk = ppl.ppl + (vnk - ppl.vdp + ppl.vdpElong + ppl.altitude) * ppl.ro / 10
+                    try:
+                        pvnk = ppl.ppl + (vnk - ppl.vdp + ppl.vdpElong + ppl.altitude) * ppl.ro / 10
+                    except:
+                        pvnk = None
                     ppl.otsResearchMarkerLayer[researchLayerID] = [pvdp, pvnk]
                     minPerf = row[1]
 
