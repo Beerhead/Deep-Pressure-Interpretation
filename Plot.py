@@ -9,6 +9,7 @@ from itertools import chain
 
 
 class PlotWidget2(pg.PlotWidget):
+    """PyQtGraph interactive class for finishing interpreting manually if needed"""
     btnSpuskPressedSignal = pyqtSignal()
     btnPodemPressedSignal = pyqtSignal()
     lineSignalToMain = pyqtSignal(object, object, object)
@@ -42,6 +43,8 @@ class PlotWidget2(pg.PlotWidget):
         self.plotItem.addLegend()
         self.plotItem.showAxis('right')
         self.plotItem.getAxis('right').setLabel('Depth, m.')
+        self.plotItem.showGrid(True, True, alpha = 0.3)
+        self.infLines = []
 
 
     def updatePlot2YRange(self, widget, newRange):
@@ -72,8 +75,6 @@ class PlotWidget2(pg.PlotWidget):
         x2 = self.data.iloc[:, 3]
         y3 = self.data.iloc[:, 4]
 
-        #print(max(y1.max(), y2.max()), y3.max())
-        #print(min(y1.min(), y2.min()), y3.min())
         for g in (x1, y1, y2, x2, y3):
             g.dropna(inplace=True)
         x1 = [i.to_pydatetime().timestamp() for i in x1.to_list()]
@@ -126,18 +127,29 @@ class PlotWidget2(pg.PlotWidget):
         self.lineSignalToMain.emit(line, start.x(), stop)
 
     def makeInfLine(self, time, polka):
-        return PolkaInfLine(pos=time.to_pydatetime().timestamp(), polka=polka)
+        line = ShelfInfLine(pos=time.to_pydatetime().timestamp(), polka=polka)
+        self.infLines.append(line)
+        return line
 
     def updateViews(self):
         self.plot2.setGeometry(self.plotItem.getViewBox().sceneBoundingRect())
         self.proxy2.setGeometry(QtCore.QRectF(self.plotItem.geometry().getCoords()[2] - 197, 0, 153, 23))
 
+    def hideInfLines(self, boolean):
+        if boolean:
+            for line in self.infLines:
+                self.plotItem.removeItem(line)
+        else:
+            for line in self.infLines:
+                self.plotItem.addItem(line)
 
-class PolkaInfLine(pg.InfiniteLine):
+
+class ShelfInfLine(pg.InfiniteLine):
+    """Line for adding/editing shelfs"""
     infLineSignal = pyqtSignal(object, object, object)
 
     def __init__(self, pos, polka, parent=None):
-        super(PolkaInfLine, self).__init__(parent)
+        super(ShelfInfLine, self).__init__(parent)
         self.setMovable(True)
         self.setPos(pos)
         self.polka = polka
@@ -148,6 +160,7 @@ class PolkaInfLine(pg.InfiniteLine):
 
 
 class PlotWidget(QWidget):
+    """Old visualisation matplotlib widget for report"""
     def __init__(self, parent=None):
         super(PlotWidget, self).__init__(parent)
         self.initUi()

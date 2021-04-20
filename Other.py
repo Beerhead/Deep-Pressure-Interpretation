@@ -16,13 +16,14 @@ from Plot import PlotWidget
 from math import ceil, floor
 
 class MeasurementsWidget(QWidget):
-
+    """Widget to choose measurements to interpret"""
     def __init__(self, parent):
         super(MeasurementsWidget, self).__init__()
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.initUI()
         self.connectUI()
         self.parent = parent
+        self.setAttribute(Qt.WA_DeleteOnClose, False)
 
     def initUI(self):
         self.setWindowTitle("Выбор замеров")
@@ -36,11 +37,11 @@ class MeasurementsWidget(QWidget):
         self.startDate = QDateEdit()
         self.startDate.setCalendarPopup(True)
         self.startDate.setDate(QDate.currentDate().addDays(-1))
-        #self.startDate.setDate(QDate(2021, 6, 15))
+        self.startDate.setDate(QDate(2021, 6, 15))
         self.endDate = QDateEdit()
         self.endDate.setCalendarPopup(True)
         self.endDate.setDate(QDate.currentDate())
-        #self.endDate.setDate(QDate(2021, 6, 16))
+        self.endDate.setDate(QDate(2021, 6, 16))
         self.fieldCombobox = QComboBox()
         self.fieldCombobox.addItems(self.getFieldNames())
         self.wellCombobox = QComboBox()
@@ -93,14 +94,19 @@ class MeasurementsWidget(QWidget):
         if len(self.Ppllist) == 0: return
         for ppl in self.Ppllist: ppl.getWellParams()
         self.parent.receiveList(self.makeModelToReturnToMain(), self.Ppllist)
-        self.close()
+        self.hide()
+
 
     def makeModelToReturnToMain(self):
         model = self.chosenMeasureListView.model()
         newModel = QtGui.QStandardItemModel(len(self.Ppllist), 4)
         newModel.setHorizontalHeaderLabels(['Площадь', 'Скважина', 'Интервал', 'В отчет/БД'])
         for i in range(model.rowCount()):
-            square, wellNum = model.item(i, 0).text().split(" ")
+            try:
+                square, wellNum = model.item(i, 0).text().split(" ")
+            except:
+                *square, wellNum = model.item(i, 0).text().split(" ")
+                square = " ".join(square)
             lastDigit = int(str(int(self.Ppllist[i].maxDepth / 50))[-1])
             if self.Ppllist[i].maxDepth <=1000:
                 interval = 50
@@ -325,13 +331,16 @@ class MeasurementsWidget(QWidget):
 
     def throwMeasurementBetweenLists(self, listviewFrom, listviewTo, listFrom, listTo):
         indexList = listviewFrom.selectedIndexes()
-        if len(indexList) > 0:
-            for index in indexList[::-1]:
-                itemText = listviewFrom.model().item(index.row()).text()
-                listviewFrom.model().removeRow(index.row())
-                newItem = QtGui.QStandardItem(itemText)
-                listviewTo.model().appendRow(newItem)
-                listTo.append(listFrom.pop(index.row()))
+        try:
+            if len(indexList) > 0:
+                for index in indexList[::-1]:
+                    itemText = listviewFrom.model().item(index.row()).text()
+                    listviewFrom.model().removeRow(index.row())
+                    newItem = QtGui.QStandardItem(itemText)
+                    listviewTo.model().appendRow(newItem)
+                    listTo.append(listFrom.pop(index.row()))
+        except:
+            pass
 
     def getWellFieldAndNumber(self, ID):
         with sqlQuery() as connection:

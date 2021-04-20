@@ -79,7 +79,7 @@ dict_suborg = {i: d for i, d in zip(index, d)}
 
 
 class Ppl:
-
+    """Research class"""
     def __init__(self, field, wname, data):
         self.field = field
         self.wellName = wname
@@ -118,9 +118,11 @@ class Ppl:
         self.centralDots = []
         self.warning = False
         self.interpreted = False
+        self.discretMan = None
+        self.discretSPS = None
 
-    def setWarning(self):
-        self.warning = True
+    def setWarning(self, boolean):
+        self.warning = boolean
 
     def makeDepthPressureTemperatureData(self):
         if self.finalData is None: return
@@ -135,24 +137,28 @@ class Ppl:
         self.depthPressureTemperatureData = pd.concat([s1, s2, s3], axis=1)
 
     def determineStaticLevel(self):
-        if self.GOB:
+        if self.GOB is not None:
             self.staticLevel = self.preciseCalcStaticLevel(self.GOB)
             self.GOB = self.staticLevel
             return
-        if self.GWB:
+        if self.GWB is not None:
             self.staticLevel = self.preciseCalcStaticLevel(self.GWB)
             self.GWB = self.staticLevel
 
     def preciseCalcStaticLevel(self, referencePoint):
         lowBound = int(max(1, referencePoint - 50))
         highBound = int(min(self.maxDepth, referencePoint + 50))
-        tempDF = self.finalData.iloc[:, [4, 3]]
-        tempDF1 = tempDF.dropna(how='all')
-        tempDF = self.finalData.iloc[:, [0, 1]]
-        tempDF2 = tempDF.dropna(how='all')
+        if self.tableInd == 0:
+            tempDF11 = self.finalData.iloc[:self.centralDots[1], [4, 3]]
+            tempDF22 = self.finalData.iloc[:self.centralDots[0], [0, 1]]
+        else:
+            tempDF11 = self.finalData.iloc[self.centralDots[1]:, [4, 3]]
+            tempDF22 = self.finalData.iloc[self.centralDots[0]:, [0, 1]]
+        tempDF1 = tempDF11.dropna(how='all')
+        tempDF2 = tempDF22.dropna(how='all')
         prevPres = 9000
         for i in range(lowBound, highBound):
-            timeDepth = Other.searchAndInterpolateOld(tempDF1, i)
+            timeDepth = Other.searchAndInterpolate(tempDF1, i)
             newPres = Other.searchAndInterpolate(tempDF2, timeDepth)
             if (newPres - prevPres)*10 > 0.7:
                 return i
@@ -245,15 +251,18 @@ class Ppl:
             self.lastMeasureDatetime = tempPressureTimeSeries.iloc[-1]
             self.tpID = dict_suborg[self.tzehID]
             self.maxDepth = self.data.iloc[:, 4].max()
+            self.discretMan = round((self.data.iloc[1,0] - self.data.iloc[0,0]).total_seconds(),0)
+            self.discretSPS = round((self.data.iloc[1,3] - self.data.iloc[0,3]).total_seconds(),0)
 
 
     def interpret(self, delta, pModel=None, dModel=None, method=1):
         transformedData = self.transformData()
         oneZeroIndexes = self.divideEtImpera(transformedData, pModel, dModel, method)
-        offsetSplittedData = self.OffsetAndSplitting(oneZeroIndexes)
-        dataList, self.timesList = self.makeDataForModels(offsetSplittedData, delta)
-        self.finalCalc(dataList, self.timesList, offsetSplittedData)
+        offsetSplitedData = self.OffsetAndSplitting(self.data, oneZeroIndexes)
+        dataList, self.timesList = self.makeDataForModels(offsetSplitedData, delta)
+        self.finalCalc(dataList, self.timesList, offsetSplitedData)
         self.interpreted = True
+
         return self
 
     def transformData(self):
@@ -302,7 +311,7 @@ class Ppl:
         prescaledSample = pd.concat([ext1, ext2, ext3, ext4, ext5, ext6], axis=1)
         return prescaledSample
 
-    def divideEtImpera(self, receivedData, pModel=None, dModel=None, method=1):
+    def divideEtImpera(self, receivedData, pModel=None, dModel=None, method=0):
         def calcATan(i, numDots, data):
             t0 = int(i - numDots) + 1
             t2 = int(i + numDots)
@@ -310,6 +319,7 @@ class Ppl:
             pres2 = data.iloc[i:t2, :].values
             x1 = pres1[:, 0]
             y1 = pres1[:, 1]
+            #print(self.wellName, x1)
             c1, stats1 = Poly.polyfit(x1, y1, 1, full=True)
             y_lin1 = Poly.polyval(x1, c1)
             r2 = r2_score(y1, y_lin1)
@@ -328,6 +338,7 @@ class Ppl:
         numDepthDots = data.iloc[:, 3].count()
         presData = data.iloc[:numPressureDots, 0:3]
         depthData = data.iloc[:numDepthDots, 3:]
+
         if pModel is None or dModel is None:
             maximum = self.data.iloc[:, 1].max()*0.98
             numStopDotsPressure = self.data.iloc[:, 1].ge(maximum).sum()/2
@@ -352,7 +363,7 @@ class Ppl:
             numStopDotsDepth = max(min(depthPredictCount, 30), 4)
 
         finalIndexes = [None, None, None, None]
-        if method == 1:
+        if method == 0:
             # pressures
             presDataNoDerivative = presData.iloc[:, [0, 2]]
             presDataNoDerivative.iloc[:, 0] = presDataNoDerivative.iloc[:,
@@ -410,7 +421,7 @@ class Ppl:
                 if atan > min_feature:
                     min_feature = atan
                     finalIndexes[3] = i
-        elif method == 2:
+        elif method == 1:
             # по давлениям
             sumOf2 = 0
             indexesOf2 = []
@@ -448,20 +459,50 @@ class Ppl:
             depthFirstSeekedIndex, depthSecondSeekedIndex = indexesOf2[seekedSequence][0], indexesOf2[seekedSequence][-1]
             finalIndexes[2] = depthFirstSeekedIndex
             finalIndexes[3] = depthSecondSeekedIndex + 1
+
+        pres=data.iloc[:, 2]
+        maxPres = pres.max()
+        if pres.value_counts()[maxPres]/numPressureDots >= 0.03:
+            index = pres[pres == maxPres].index
+            finalIndexes[0], finalIndexes[1] = index[0], index[-1]
+        depth = data.iloc[:, 5]
+        maxDepth = depth.max()
+        if depth.value_counts()[maxDepth]/numDepthDots >= 0.03:
+            index = depth[depth == maxDepth].index
+            finalIndexes[2], finalIndexes[3] = index[0], index[-1]
         return finalIndexes
 
-    def OffsetAndSplitting(self, receivedIndexes):
-        ind = receivedIndexes
-        delimeterPressure = int((ind[0] + ind[1]) / 2)
-        delimeterDepth = int((ind[2] + ind[3]) / 2)
-        self.centralDots = [delimeterPressure, delimeterDepth]
-        dt1 = self.data.iloc[ind[0], 0] - self.data.iloc[ind[2], 3]
-        dt2 = self.data.iloc[ind[1], 0] - self.data.iloc[ind[3], 3]
-        offsetData1 = self.data.copy()
-        offsetData2 = self.data.copy()
-        target_name = self.data.columns[3]
-        offsetData1[target_name] = offsetData1[target_name].apply(lambda x: x + dt1)
-        offsetData2[target_name] = offsetData2[target_name].apply(lambda x: x + dt2)
+    def OffsetAndSplitting(self, data, receivedIndexes = None):
+        target_name = data.columns[3]
+        offsetData1 = data.copy()
+        offsetData2 = data.copy()
+        if receivedIndexes is not None:
+            ind = receivedIndexes
+            delimeterPressure = int((ind[0] + ind[1]) / 2)
+            delimeterDepth = int((ind[2] + ind[3]) / 2)
+            self.centralDots = [delimeterPressure, delimeterDepth]
+            dt1 = data.iloc[ind[0], 0] - data.iloc[ind[2], 3]
+            dt2 = data.iloc[ind[1], 0] - data.iloc[ind[3], 3]
+            try:
+                if dt1.total_seconds() !=0:
+                    dif = abs(dt1.total_seconds())/abs(dt2.total_seconds())
+                else:
+                    dif = self.discretMan/abs(dt2.total_seconds())
+            except:
+                if dt1.total_seconds() != 0:
+                    dif = abs(dt1.total_seconds()) / self.discretSPS
+
+            if not 0.1 < dif < 10 and dif !=0:
+                self.setWarning(True)
+                tempD1, tempD2 = abs(dt1), abs(dt2)
+                if tempD1 < tempD2:
+                    dt2 = dt1
+                else:
+                    dt1 = dt2
+            offsetData1[target_name] = offsetData1[target_name].apply(lambda x: x + dt1)
+            offsetData2[target_name] = offsetData2[target_name].apply(lambda x: x + dt2)
+        else:
+            delimeterPressure, delimeterDepth = self.centralDots[0], self.centralDots[1]
         db1 = pd.concat([offsetData1.iloc[:delimeterPressure, 0],
                          offsetData1.iloc[:delimeterPressure, 1],
                          offsetData1.iloc[:delimeterPressure, 2],
@@ -480,7 +521,6 @@ class Ppl:
         return doubleData
 
     def supportDots(self, data, interval):
-
         depth = []
         elongation = []
         pressure = []
@@ -575,11 +615,7 @@ class Ppl:
 
     def finalCalc(self, dataList, timeList, newData):
 
-        modelPair = []
-        roPair = []
-        pplPair = []
-        fTypePair = []
-        checksPair = []
+        modelPair, roPair, pplPair, fTypePair, checksPair = [],[],[],[],[]
         for polka in dataList:
             tempModel, ro, ppl, fType, checks = self.makeModel(polka)
             modelPair.append(tempModel)
@@ -615,26 +651,12 @@ class Ppl:
                 self.ro = roPair[1]
                 self.ppl = pplPair[1]
 
-        if fTypePair[0] != fTypePair[1]:
+        if fTypePair[0] != fTypePair[1] or abs((roPair[0]-roPair[1])/max(roPair[0],roPair[1])) > 0.1:
             self.warning = True
 
-        t1 = newData[0].iloc[:, [0, 1, 2]]
-        t2 = newData[1].iloc[:, [0, 1, 2]]
-        if t1.isnull().sum().sum() > 0:
-            t1.dropna(inplace=True, how='all')
-        if t2.isnull().sum().sum() > 0:
-            t2.dropna(inplace=True, how='all')
-        pres = pd.concat([t1, t2], axis=0)
-        pres.reset_index(inplace=True, drop=True)
-        t3 = newData[0].iloc[:, [3, 4]]
-        t4 = newData[1].iloc[:, [3, 4]]
-        if t3.isnull().sum().sum() > 0:
-            t3.dropna(inplace=True, how='all')
-        if t4.isnull().sum().sum() > 0:
-            t4.dropna(inplace=True, how='all')
-        dep = pd.concat([t3, t4], axis=0)
-        dep.reset_index(inplace=True, drop=True)
+        pres, dep = self.concatHalfs(newData)
         temp = pd.concat([pres, dep], axis=1)
+
         self.finalData = temp
         tempPlotWidget = PlotWidget2()
         self.finalFig = tempPlotWidget.plot(temp, save=True)
@@ -642,8 +664,26 @@ class Ppl:
         self.calcPhaseBorders()
         self.determineStaticLevel()
 
+    def concatHalfs(self, pairData):
+        t1 = pairData[0].iloc[:, [0, 1, 2]]
+        t2 = pairData[1].iloc[:, [0, 1, 2]]
+        if t1.isnull().sum().sum() > 0:
+            t1.dropna(inplace=True, how='all')
+        if t2.isnull().sum().sum() > 0:
+            t2.dropna(inplace=True, how='all')
+        pres = pd.concat([t1, t2], axis=0)
+        pres.reset_index(inplace=True, drop=True)
+        t3 = pairData[0].iloc[:, [3, 4]]
+        t4 = pairData[1].iloc[:, [3, 4]]
+        if t3.isnull().sum().sum() > 0:
+            t3.dropna(inplace=True, how='all')
+        if t4.isnull().sum().sum() > 0:
+            t4.dropna(inplace=True, how='all')
+        dep = pd.concat([t3, t4], axis=0)
+        dep.reset_index(inplace=True, drop=True)
+        return pres, dep
 
-    def makeModel(self, halfData):
+    def makeModel(self, halfData, checks=None):
         model = QtGui.QStandardItemModel(len(halfData), 7)
         model.setHorizontalHeaderLabels(['Depth', 'Elongation', 'Pressure', 'Temperature', 'Density', 'Fluid type', ''])
         densities = [0]
@@ -688,20 +728,20 @@ class Ppl:
             elif typesList[-2] != typesList[-3] and 0.7 < calcList[-2] < 1.25 and 0.7 < calcList[-3] < 1.25:
                 if typesList[-3] == typesList[-4] and 0.7 < calcList[-3] < 1.25 and 0.7 < calcList[-4] < 1.25:
                     refType = typesList[-3]
-            else:
-                maxNum = 0
-                typesSet = set(typesList)
-                for fluidType in typesSet:
-                    num = typesList.count(fluidType)
-                    if num > maxNum:
-                        maxNum = num
-                        refType = fluidType
+                else:
+                    maxNum = 0
+                    typesSet = set(typesList)
+                    for fluidType in typesSet:
+                        num = typesList.count(fluidType)
+                        if num > maxNum or (num == maxNum and refType == "Gas"):
+                            maxNum = num
+                            refType = fluidType
         else:
             maxNum = 0
             typesSet = set(typesList)
             for fluidType in typesSet:
                 num = typesList.count(fluidType)
-                if num > maxNum:
+                if num > maxNum or (num == maxNum and refType == "Gas"):
                     maxNum = num
                     refType = fluidType
         if refType == "Water":
@@ -710,7 +750,9 @@ class Ppl:
         elif refType == "Oil":
             target = 0.88
             calcList = [ro for ro in calcList if 0.7 < ro < 0.98]
-
+        else:
+            target = 0.5
+            calcList = [ro for ro in calcList if 0.01 <= ro < 0.7]
 
         if len(calcList) % 2 == 0:
             medianRo2 = median(calcList)
@@ -735,20 +777,36 @@ class Ppl:
         else:
             medianRo = median(calcList)
         finalRo = []
+        altFinalRo = []
         for row in range(len(halfData) - numDots, len(halfData)):
             m1 = max(float(model.index(row, 4).data()), medianRo)
             m2 = min(float(model.index(row, 4).data()), medianRo)
-            if model.index(row, 5).data() == refType and (m1 - m2) / m1 < 0.08:
+            if model.index(row, 5).data() == refType and (m1 - m2) / m1 < 0.08 and checks is None:
                 model.item(row, 6).setCheckState(2)
                 finalRo.append(float(model.item(row, 4).text()))
-        if 0.8 > mean(finalRo) or 1.2 < mean(finalRo) or 0.8 > mean(finalRo) or 1.2 < mean(finalRo):
+            else:
+                altFinalRo.append(float(model.item(row, 4).text()))
+        if checks is not None:
+            for row in range(len(checks)):
+                if checks[row]:
+                    model.item(row, 6).setCheckState(2)
+        try:
+            meanRo = mean(finalRo)
+        except:
+            meanRo = mean(altFinalRo)
+        if 0.8 > meanRo or 1.2 < meanRo or 0.8 > meanRo or 1.2 < meanRo:
             self.warning = True
+
         mtmeterAbsDepth = float(model.item(len(halfData) - 1, 0).text()) - float(
             model.item(len(halfData) - 1, 1).text())
         vdpAbsDepth = self.vdp - self.vdpElong
         delta = vdpAbsDepth - mtmeterAbsDepth
-        ppl = round(float(model.item(len(halfData) - 1, 2).text()) + delta * mean(finalRo) / 10, 3)
-        return model, round(mean(finalRo), 3), ppl, refType, len(finalRo)
+        ppl = round(float(model.item(len(halfData) - 1, 2).text()) + delta * meanRo / 10, 3)
+
+        # lengthToReturn = len(finalRo)
+        # if lengthToReturn == 0: lengthToReturn = len(altFinalRo)
+
+        return model, round(meanRo, 3), ppl, refType, len(finalRo)
 
 def PplFabric(field, wname, data):
     return Ppl(field, wname, data)
@@ -769,9 +827,7 @@ def calcBorders(typeList, depthShelfs):
 
         return newList
 
-    GOB = None
-    OWB = None
-    GWB = None
+    GOB, OWB, GWB = None, None, None
     typeList = disintegrateAbortions(typeList)
     uniqueSet = set(typeList)
     sortedListOfPhases = sorted(uniqueSet)
