@@ -1,2 +1,2 @@
 # Deep-Pressure-Interpretation
-Auto interpretaion of deep pressure well testing
+Auto interpretation of deep pressure well testing
